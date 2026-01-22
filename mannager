@@ -1,226 +1,223 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, RotateCcw, Download, X, Share2, Copy, 
-  ExternalLink, CheckCircle2, User, Car
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프리패스 매물현황</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        body { font-family: sans-serif; font-weight: 700; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ddd; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
 
-const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREzDg6YIAoZBiSeT58g6sksXFZkILyX0hKJeuQIdfKxWDRgu7SX7epVkuKMjXvp8n10-sNCoWRyJdJ/pub?output=csv";
+        // 구글 시트 주소
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREzDg6YIAoZBiSeT58g6sksXFZkILyX0hKJeuQIdfKxWDRgu7SX7epVkuKMjXvp8n10-sNCoWRyJdJ/pub?output=csv";
 
-const toNumber = (val) => {
-  const n = Number(String(val ?? "").replace(/[^0-9]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-};
+        const App = () => {
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedCar, setSelectedCar] = useState(null);
+            const periods = [6, 12, 24, 36, 48, 60];
 
-const formatPrice = (val) => {
-  const n = toNumber(val);
-  return n === 0 ? "-" : n.toLocaleString();
-};
+            // 담당자 정보
+            const manager = { 소속: "프리패스", 성함직책: "박영협 팀장", 연락처: "010-3333-0000" };
 
-const hasPositivePrice = (val) => toNumber(val) > 0;
+            const fetchData = () => {
+                setLoading(true);
+                Papa.parse(CSV_URL, {
+                    download: true, header: true, skipEmptyLines: true,
+                    complete: (results) => {
+                        const processed = results.data.filter(row => Object.values(row).some(v => v)).map(row => {
+                            const pData = {};
+                            periods.forEach(p => {
+                                const rentKey = Object.keys(row).find(k => k.includes(`${p}개월`) && k.includes('대여료'));
+                                const depKey = Object.keys(row).find(k => k.includes(`${p}개월`) && k.includes('보증금'));
+                                pData[`${p}M`] = row[rentKey] || "";
+                                pData[`${p}B`] = row[depKey] || "";
+                            });
+                            return { 
+                                ...row, ...pData, 
+                                _no: row['차량정보_차량번호'] || "", 
+                                _md: row['차량정보_모델'] || "", 
+                                _tr: `${row['차량정보_세부트림'] || ""} ${row['차량정보_선택옵션'] || ""}`.trim() 
+                            };
+                        });
+                        setData(processed);
+                        setLoading(false);
+                    }
+                });
+            };
 
-const App = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCar, setSelectedCar] = useState(null);
-  const [notification, setNotification] = useState(null);
+            useEffect(() => { fetchData(); }, []);
 
-  const periods = [6, 12, 24, 36, 48, 60];
-  const [selectedPeriods] = useState([6, 12, 24, 36, 48, 60]);
+            const filtered = useMemo(() => data.filter(i => `${i._md}${i._no}`.toLowerCase().includes(searchTerm.toLowerCase())), [data, searchTerm]);
 
-  const [manager] = useState({
-    소속: "프리패스",
-    성함직책: "박영협 팀장",
-    연락처: "010-3333-0000",
-  });
+            const formatPrice = (v) => v ? Number(String(v).replace(/[^0-9]/g, "")).toLocaleString() : "-";
 
-  const showToast = (msg) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 2500);
-  };
+            return (
+                <div className="flex flex-col h-screen bg-white text-[12px]">
+                    {/* 상단 헤더 */}
+                    <header className="h-12 border-b flex items-center px-4 gap-4 bg-white z-50">
+                        <div className="relative">
+                            <i className="lucide-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" placeholder="검색..." className="w-[300px] pl-10 pr-4 py-1.5 border outline-none font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        </div>
+                        <button onClick={fetchData} className="flex items-center gap-1 text-slate-500 font-bold">
+                            <i className={`lucide-rotate-ccw ${loading ? 'animate-spin' : ''}`}></i> <span>최신화</span>
+                        </button>
+                    </header>
 
-  const handleCopy = (text, successMsg) => {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    showToast(successMsg);
-  };
+                    <div className="flex-1 flex overflow-hidden">
+                        {/* 메인 리스트 */}
+                        <main className="flex-1 overflow-auto custom-scrollbar">
+                            <table className="w-full border-collapse table-fixed">
+                                <thead className="sticky top-0 bg-slate-50 border-b-2">
+                                    <tr className="h-10 text-slate-700">
+                                        <th className="w-[110px] text-left px-3">차량번호</th>
+                                        <th className="w-[160px] text-left px-3">모델</th>
+                                        <th className="text-left px-4">트림/옵션</th>
+                                        {periods.map(p => <th key={p} className="w-[85px] text-right px-1 bg-blue-50/30">{p}개월</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filtered.map((r, i) => (
+                                        <tr key={i} onClick={() => setSelectedCar(r)} className={`h-14 border-b cursor-pointer hover:bg-blue-50 ${selectedCar?._no === r._no ? 'bg-blue-50' : ''}`}>
+                                            <td className="px-3 font-mono">{r._no}</td>
+                                            <td className="px-3 font-black text-slate-800">{r._md}</td>
+                                            <td className="px-4 truncate text-slate-500">{r._tr}</td>
+                                            {periods.map(p => <td key={p} className="px-1 text-right font-black text-slate-900">{formatPrice(r[`${p}M`])}</td>)}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </main>
 
-  const fetchData = async () => {
-    if (!window.Papa) {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';
-        script.onload = () => fetchData();
-        document.head.appendChild(script);
-        return;
-    }
-    setLoading(true);
-    window.Papa.parse(CSV_URL, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const rawData = results.data;
-        const processed = rawData
-          .filter(row => Object.values(row).some(v => v && String(v).trim().length > 0))
-          .map(row => {
-            const periodData = {};
-            periods.forEach(p => {
-              const rentKey = Object.keys(row).find(k => k.includes(`${p}개월`) && k.includes('대여료'));
-              const depKey = Object.keys(row).find(k => k.includes(`${p}개월`) && k.includes('보증금'));
-              periodData[`${p}개월`] = row[rentKey] || "";
-              periodData[`${p}개월보증`] = row[depKey] || "";
-            });
-            return { ...row, ...periodData, _차량번호: row['차량정보_차량번호'] || "", _모델명: row['차량정보_모델'] || row['차량정보_세부모델'] || "", _트림옵션: `${row['차량정보_세부트림'] || ""} ${row['차량정보_선택옵션'] || ""}`.trim() };
-          });
-        setData(processed);
-        setLoading(false);
-        showToast("데이터 동기화 완료");
-      }
-    });
-  };
+                        {/* 상세페이지 Aside */}
+                        <aside className={`fixed inset-y-0 right-0 w-[480px] bg-white shadow-2xl transition-transform duration-300 border-l z-[80] flex flex-col ${selectedCar ? 'translate-x-0' : 'translate-x-full'}`}>
+                            {selectedCar && (
+                                <>
+                                    <div className="h-12 border-b flex justify-between items-center px-5 bg-slate-50">
+                                        <span className="font-black text-slate-800 uppercase">차량 상세 정보 데이터 시트</span>
+                                        <button onClick={() => setSelectedCar(null)} className="p-1 hover:bg-slate-200 transition-colors"><i className="lucide-x"></i></button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-10 pb-32 bg-white custom-scrollbar">
+                                        {/* 01. 차량정보 */}
+                                        <section>
+                                            <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
+                                                <div className="w-1.5 h-3 bg-slate-800" />
+                                                <h3 className="text-slate-900 font-black text-[12px]">01. 차량정보</h3>
+                                            </div>
+                                            <div className="border border-slate-300 divide-y divide-slate-200">
+                                                {Object.entries(selectedCar).map(([k, v]) => k.startsWith('차량정보_') && !k.includes('링크') && (
+                                                    <div key={k} className="flex p-3 bg-white">
+                                                        <span className="w-28 text-slate-400 text-[10px] shrink-0">{k.replace('차량정보_', '')}</span>
+                                                        <span className="text-[11px] text-slate-800 font-black">{v || "-"}</span>
+                                                    </div>
+                                                ))}
+                                                {selectedCar['차량정보_사진링크'] && (
+                                                    <a href={selectedCar['차량정보_사진링크']} target="_blank" rel="noopener noreferrer" className="p-3 flex items-center justify-center gap-2 text-[10px] font-black bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors">
+                                                        실물 사진 데이터 확인 <i className="lucide-external-link"></i>
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </section>
 
-  useEffect(() => { fetchData(); }, []);
+                                        {/* 02. 대여료정보 */}
+                                        <section>
+                                            <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
+                                                <div className="w-1.5 h-3 bg-slate-800" />
+                                                <h3 className="text-slate-900 font-black text-[12px]">02. 대여료정보</h3>
+                                            </div>
+                                            <table className="w-full border border-slate-300 text-[11px]">
+                                                <thead className="bg-slate-50 border-b border-slate-300 text-slate-500">
+                                                    <tr><th className="py-2 border-r">대여기간</th><th className="border-r">월 대여료</th><th>보증금</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {periods.map(p => selectedCar[`${p}M`] && (
+                                                        <tr key={p} className="border-b border-slate-200 text-center">
+                                                            <td className="py-2.5 bg-slate-50 border-r font-black text-slate-500">{p}개월</td>
+                                                            <td className="border-r font-black text-blue-600">{formatPrice(selectedCar[`${p}M`])}</td>
+                                                            <td className="font-black text-slate-800">{formatPrice(selectedCar[`${p}B`])}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </section>
 
-  const handleRowClick = (car) => {
-    if (selectedCar?._차량번호 === car._차량번호) setSelectedCar(null);
-    else setSelectedCar(car);
-  };
+                                        {/* 03. 보험/계약정보 */}
+                                        <section>
+                                            <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
+                                                <div className="w-1.5 h-3 bg-slate-800" />
+                                                <h3 className="text-slate-900 font-black text-[12px]">03. 보험/계약정보</h3>
+                                            </div>
+                                            <div className="border border-slate-300 divide-y divide-slate-200">
+                                                {Object.entries(selectedCar).map(([k, v]) => (k.startsWith('보험정보_') || k.startsWith('계약정보_')) && (
+                                                    <div key={k} className="flex p-3 bg-white">
+                                                        <span className="w-28 text-slate-400 text-[10px] shrink-0">{k.split('_')[1]}</span>
+                                                        <span className="text-[11px] text-slate-800 font-black">{v || "-"}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="flex p-3 bg-blue-50/50">
+                                                    <span className="w-28 text-blue-400 text-[10px] shrink-0">긴급출동</span>
+                                                    <span className="text-[11px] text-blue-700 font-black italic underline">연 5회 무상 제공 서비스</span>
+                                                </div>
+                                            </div>
+                                        </section>
 
-  const filteredData = useMemo(() => {
-    return data.filter(item => {
-      const hay = `${item._모델명}${item._차량번호}${item._트림옵션}`.toLowerCase();
-      return hay.includes(searchTerm.toLowerCase());
-    });
-  }, [data, searchTerm]);
+                                        {/* 04. 담당자정보 (마지막 섹션) */}
+                                        <section>
+                                            <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
+                                                <div className="w-1.5 h-3 bg-slate-800" />
+                                                <h3 className="text-slate-900 font-black text-[12px]">04. 담당자정보</h3>
+                                            </div>
+                                            <div className="border-2 border-slate-800 p-4 flex justify-between items-center bg-white shadow-sm">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[12px] font-black text-slate-800">{manager.성함직책}</span>
+                                                        <span className="text-[10px] text-slate-400 uppercase tracking-widest">{manager.소속}</span>
+                                                    </div>
+                                                    <div className="text-[16px] font-mono font-black text-slate-900 tracking-tighter underline underline-offset-2">{manager.연락처}</div>
+                                                </div>
+                                                <i className="lucide-user text-slate-200 text-3xl"></i>
+                                            </div>
+                                        </section>
+                                        
+                                        {/* 06번 섹션 코드가 완전히 제거되었습니다. */}
+                                    </div>
 
-  const handleTextCopy = () => {
-    if (!selectedCar) return;
-    const rentalList = periods.map(p => ({ label: `${p}개월`, rent: selectedCar[`${p}개월`], dep: selectedCar[`${p}개월보증`] }))
-      .filter(i => hasPositivePrice(i.rent))
-      .map(i => `${i.label} : 월 ${formatPrice(i.rent)}${hasPositivePrice(i.dep) ? ` / 보증 ${formatPrice(i.dep)}` : ""} (분납가능)`)
-      .join('\n');
-    const copyText = `[차량 견적 안내]\n\n차명 : ${selectedCar['차량정보_제조사'] || ""} ${selectedCar._모델명}\n번호 : ${selectedCar._차량번호}\n색상 : ${selectedCar['차량정보_외부색상']}(외) / ${selectedCar['차량정보_내부색상']}(내)\n\n[렌트료]\n${rentalList}\n\n담당 : ${manager.성함직책} (${manager.연락처})`;
-    handleCopy(copyText, "영업용 견적 텍스트 복사완료");
-  };
+                                    {/* 하단 버튼 */}
+                                    <div className="p-5 border-t border-slate-300 bg-white shrink-0 grid grid-cols-2 gap-2">
+                                        <button className="flex items-center justify-center gap-2 bg-slate-800 text-white py-4 text-[11px] font-black hover:bg-slate-900 border border-slate-800 shadow-md transition-all active:scale-95">
+                                            링크 공유
+                                        </button>
+                                        <button className="flex items-center justify-center gap-2 bg-white text-slate-800 py-4 text-[11px] font-black hover:bg-slate-50 border border-slate-800 shadow-sm transition-all active:scale-95">
+                                            영업 견적 복사
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </aside>
+                    </div>
+                </div>
+            );
+        };
 
-  return (
-    <div className="flex flex-col h-screen bg-white text-[12px] text-[#333] font-sans overflow-hidden font-bold">
-      <header className="h-12 bg-white border-b border-slate-300 flex items-center px-4 gap-4 shrink-0 z-50">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input type="text" placeholder="검색..." className="w-[300px] pl-10 pr-4 py-1.5 bg-slate-50 border border-slate-300 rounded-none outline-none focus:border-slate-500 text-[11px]" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-4 text-slate-500 ml-2" onClick={fetchData}>
-          <RotateCcw size={15} className={loading ? 'animate-spin' : ''} />
-          <span className="cursor-pointer">최신화</span>
-        </div>
-      </header>
-      <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 overflow-auto bg-white custom-scrollbar">
-          <table className="w-full border-collapse table-fixed text-[11px] min-w-max">
-            <thead className="sticky top-0 bg-[#f8f9fa] z-10 border-b-2 border-slate-300">
-              <tr className="text-slate-700 h-10">
-                <th className="px-3 border-r border-slate-200 w-[110px] text-left">차량번호</th>
-                <th className="px-3 border-r border-slate-200 w-[160px] text-left">모델</th>
-                <th className="px-4 border-r border-slate-200 w-[250px] text-left">트림</th>
-                <th className="px-2 border-r border-slate-200 w-[85px] text-center">주행거리</th>
-                {periods.map(p => <th key={p} className="px-1 border-r border-slate-200 w-[75px] text-right bg-blue-50/30">{p}개월</th>)}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredData.map((row, idx) => (
-                <tr key={idx} onClick={() => handleRowClick(row)} className={`hover:bg-blue-50/50 cursor-pointer h-14 ${selectedCar?._차량번호 === row._차량번호 ? 'bg-blue-50' : ''}`}>
-                  <td className="px-3 border-r border-slate-100">{row._차량번호}</td>
-                  <td className="px-3 border-r border-slate-100 font-black">{row._모델명}</td>
-                  <td className="px-4 border-r border-slate-100 truncate">{row._트림옵션}</td>
-                  <td className="px-2 border-r border-slate-100 text-center">{row['차량정보_주행거리']}</td>
-                  {periods.map(p => <td key={p} className="px-1 border-r border-slate-100 text-right font-black">{formatPrice(row[`${p}개월`])}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </main>
-        <aside className={`fixed inset-y-0 right-0 w-[500px] bg-white shadow-2xl transition-transform duration-300 z-[80] border-l border-slate-300 flex flex-col ${selectedCar ? 'translate-x-0' : 'translate-x-full'}`}>
-          {selectedCar && (
-            <div className="h-full flex flex-col">
-              <div className="h-12 border-b border-slate-300 flex justify-between items-center bg-slate-50 px-5 shrink-0">
-                <div className="flex items-center gap-2"><Car size={16} /><h2 className="font-black text-[11px]">차량 상세 정보</h2></div>
-                <button onClick={() => setSelectedCar(null)}><X size={18} /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-12 pb-32 bg-white">
-                <section>
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-1">
-                    <div className="w-1.5 h-3 bg-slate-800" /><h3 className="font-black text-[12px]">01. 차량정보</h3>
-                  </div>
-                  <div className="border border-slate-300 divide-y divide-slate-200">
-                    {Object.entries(selectedCar).map(([key, value]) => {
-                      if (!key.startsWith('차량정보_') || key.includes('사진링크')) return null;
-                      return <div key={key} className="flex p-3 bg-white"><span className="w-28 text-slate-400 text-[10px]">{key.replace('차량정보_', '')}</span><span className="text-[11px] font-black">{value || "-"}</span></div>;
-                    })}
-                  </div>
-                </section>
-                <section>
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-1">
-                    <div className="w-1.5 h-3 bg-slate-800" /><h3 className="font-black text-[12px]">02. 대여료정보</h3>
-                  </div>
-                  <table className="w-full text-[11px] border border-slate-300">
-                    <thead className="bg-[#f8f9fa] border-b border-slate-300"><tr><th className="py-2">대여기간</th><th>월 대여료</th><th>보증금</th></tr></thead>
-                    <tbody>
-                      {periods.map((p, idx) => hasPositivePrice(selectedCar[`${p}개월`]) && (
-                        <tr key={idx} className="border-b border-slate-200 text-center"><td className="py-2.5 bg-slate-50">{p}개월</td><td className="font-black">{formatPrice(selectedCar[`${p}개월`])}</td><td>{formatPrice(selectedCar[`${p}개월보증`])}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </section>
-                <section>
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-1">
-                    <div className="w-1.5 h-3 bg-slate-800" /><h3 className="font-black text-[12px]">03. 보험정보</h3>
-                  </div>
-                  <div className="border border-slate-300 divide-y divide-slate-200">
-                    {Object.entries(selectedCar).map(([key, value]) => {
-                      if (!key.startsWith('보험정보_')) return null;
-                      return <div key={key} className="flex p-3 bg-white"><span className="w-28 text-slate-400 text-[10px]">{key.replace('보험정보_', '')}</span><span className="text-[11px] font-black">{value || "-"}</span></div>;
-                    })}
-                    <div className="flex p-3 bg-blue-50/50"><span className="w-28 text-blue-400 text-[10px]">서비스</span><span className="text-[11px] text-blue-700 font-black">긴급출동 연 5회 무상</span></div>
-                  </div>
-                </section>
-                <section>
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-1">
-                    <div className="w-1.5 h-3 bg-slate-800" /><h3 className="font-black text-[12px]">04. 계약정보</h3>
-                  </div>
-                  <div className="border border-slate-300 divide-y divide-slate-200">
-                    {Object.entries(selectedCar).map(([key, value]) => {
-                      if (!key.startsWith('계약정보_')) return null;
-                      return <div key={key} className="flex p-3 bg-white"><span className="w-28 text-slate-400 text-[10px]">{key.replace('계약정보_', '')}</span><span className="text-[11px] font-black">{value || "-"}</span></div>;
-                    })}
-                  </div>
-                </section>
-                <section>
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-1">
-                    <div className="w-1.5 h-3 bg-slate-800" /><h3 className="font-black text-[12px]">05. 담당자정보</h3>
-                  </div>
-                  <div className="border-2 border-slate-800 p-4 flex justify-between items-center bg-white shadow-sm">
-                    <div className="space-y-1"><div className="flex items-center gap-2"><span className="text-[12px] font-black">{manager.성함직책}</span><span className="text-[10px] text-slate-400">{manager.소속}</span></div><div className="text-[15px] font-mono font-black">{manager.연락처}</div></div>
-                    <User size={24} className="text-slate-200" />
-                  </div>
-                </section>
-              </div>
-              <div className="p-5 border-t border-slate-300 bg-white shrink-0 grid grid-cols-2 gap-2">
-                <button onClick={() => handleCopy(`${window.location.origin}/share/${selectedCar._차량번호}`, "복사완료")} className="bg-slate-800 text-white py-4 text-[11px] font-black shadow-md">링크 공유</button>
-                <button onClick={handleTextCopy} className="bg-white text-slate-800 py-4 text-[11px] font-black border border-slate-800 shadow-sm">견적 복사</button>
-              </div>
-            </div>
-          )}
-        </aside>
-      </div>
-      {notification && <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900 text-white px-8 py-3.5 flex items-center gap-4"><CheckCircle2 size={18} className="text-blue-500" /><span className="font-black text-[11px] italic">{notification}</span></div>}
-      <style dangerouslySetInnerHTML={{ __html: `.custom-scrollbar::-webkit-scrollbar { height: 6px; width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); } .animate-spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }` }} />
-    </div>
-  );
-};
-
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
