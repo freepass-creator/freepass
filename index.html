@@ -13,9 +13,13 @@
     <style>
         body { font-family: sans-serif; font-weight: 700; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ddd; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
@@ -23,7 +27,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 구글 시트 주소
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREzDg6YIAoZBiSeT58g6sksXFZkILyX0hKJeuQIdfKxWDRgu7SX7epVkuKMjXvp8n10-sNCoWRyJdJ/pub?output=csv";
 
         const App = () => {
@@ -31,10 +34,17 @@
             const [loading, setLoading] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedCar, setSelectedCar] = useState(null);
+            const [toast, setToast] = useState(null);
             const periods = [6, 12, 24, 36, 48, 60];
+            // 복수 선택을 위한 상태 (기본값은 전체 선택)
+            const [selectedPeriods, setSelectedPeriods] = useState(periods);
 
-            // 담당자 정보
             const manager = { 소속: "프리패스", 성함직책: "박영협 팀장", 연락처: "010-3333-0000" };
+
+            const showToast = (message) => {
+                setToast(message);
+                setTimeout(() => setToast(null), 3000);
+            };
 
             const fetchData = () => {
                 setLoading(true);
@@ -58,70 +68,170 @@
                         });
                         setData(processed);
                         setLoading(false);
+                        showToast("데이터를 최신화했습니다.");
                     }
                 });
             };
 
             useEffect(() => { fetchData(); }, []);
 
-            const filtered = useMemo(() => data.filter(i => `${i._md}${i._no}`.toLowerCase().includes(searchTerm.toLowerCase())), [data, searchTerm]);
+            const filtered = useMemo(() => {
+                return data.filter(i => `${i._md}${i._no}${i._tr}`.toLowerCase().includes(searchTerm.toLowerCase()));
+            }, [data, searchTerm]);
 
             const formatPrice = (v) => v ? Number(String(v).replace(/[^0-9]/g, "")).toLocaleString() : "-";
 
+            // 클립보드 복사 로직 (iframe 보안 이슈 해결)
+            const copyToClipboard = (text, successMsg) => {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(successMsg);
+                } catch (err) {
+                    showToast("복사에 실패했습니다.");
+                }
+                document.body.removeChild(textArea);
+            };
+
+            const handleCopyQuote = () => {
+                if (!selectedCar) return;
+                const quoteText = `
+[프리패스 차량 견적 정보]
+차량: ${selectedCar._md} (${selectedCar._no})
+트림: ${selectedCar._tr}
+---------------------------
+${periods.map(p => selectedCar[`${p}M`] ? `${p}개월: 월 ${formatPrice(selectedCar[`${p}M`])}원 (보증금 ${formatPrice(selectedCar[`${p}B`])}원)` : '').filter(Boolean).join('\n')}
+---------------------------
+담당자: ${manager.성함직책} (${manager.연락처})
+                `.trim();
+                copyToClipboard(quoteText, "견적 정보가 클립보드에 복사되었습니다.");
+            };
+
+            const handleShareLink = () => {
+                copyToClipboard(window.location.href, "페이지 링크가 복사되었습니다.");
+            };
+
+            const downloadExcel = () => {
+                if (filtered.length === 0) return;
+                const csv = Papa.unparse(filtered);
+                const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `프리패스_매물현황_${new Date().toISOString().slice(0,10)}.csv`);
+                link.click();
+                showToast("엑셀 파일 저장을 시작합니다.");
+            };
+
+            const handleRowClick = (car) => {
+                if (selectedCar?._no === car._no) {
+                    setSelectedCar(null);
+                } else {
+                    setSelectedCar(null);
+                    setTimeout(() => { setSelectedCar(car); }, 50);
+                }
+            };
+
+            // 기간 개별 토글 로직
+            const togglePeriod = (p) => {
+                setSelectedPeriods(prev => 
+                    prev.includes(p) ? prev.filter(item => item !== p) : [...prev, p]
+                );
+            };
+
+            // 전체 선택/해제 토글 로직
+            const toggleAllPeriods = () => {
+                if (selectedPeriods.length === periods.length) {
+                    setSelectedPeriods([]); 
+                } else {
+                    setSelectedPeriods([...periods]);
+                }
+            };
+
             return (
-                <div className="flex flex-col h-screen bg-white text-[12px]">
-                    {/* 상단 헤더 */}
-                    <header className="h-12 border-b flex items-center px-4 gap-4 bg-white z-50">
+                <div className="flex flex-col h-screen bg-white text-[12px] relative overflow-hidden">
+                    {/* 토스트 메시지 */}
+                    {toast && (
+                        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-slate-800 text-white px-6 py-3 rounded-full shadow-lg font-bold animate-slide-up">
+                            {toast}
+                        </div>
+                    )}
+
+                    <header className="h-14 border-b flex items-center px-4 gap-6 bg-white z-50 shrink-0">
                         <div className="relative">
                             <i className="lucide-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="text" placeholder="검색..." className="w-[300px] pl-10 pr-4 py-1.5 border outline-none font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <input type="text" placeholder="검색..." className="w-[180px] pl-10 pr-4 py-1.5 border outline-none font-bold focus:border-slate-800" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
-                        <button onClick={fetchData} className="flex items-center gap-1 text-slate-500 font-bold">
+                        <button onClick={fetchData} className="flex items-center gap-1 text-slate-500 font-bold whitespace-nowrap hover:text-slate-800 transition-colors">
                             <i className={`lucide-rotate-ccw ${loading ? 'animate-spin' : ''}`}></i> <span>최신화</span>
                         </button>
+                        <div className="h-4 w-[1px] bg-slate-200" />
+                        <div className="text-slate-900 font-black whitespace-nowrap">
+                            검색 결과: <span className="text-blue-600">{filtered.length}</span>대
+                        </div>
+                        <button onClick={downloadExcel} className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 font-bold transition-colors shadow-sm">
+                            <i className="lucide-download text-[14px]"></i> 엑셀 저장
+                        </button>
+                        <div className="h-4 w-[1px] bg-slate-200" />
+                        
+                        {/* 복수 선택 가능한 기간 필터 버튼 */}
+                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                            <span className="text-slate-400 mr-2 whitespace-nowrap">기간설정:</span>
+                            <button onClick={toggleAllPeriods} className={`px-2 py-1 border font-bold transition-colors whitespace-nowrap ${selectedPeriods.length === periods.length ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-200'}`}>전체</button>
+                            {periods.map(p => (
+                                <button key={p} onClick={() => togglePeriod(p)} className={`px-2 py-1 border font-bold transition-colors whitespace-nowrap ${selectedPeriods.includes(p) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200'}`}>
+                                    {p}M
+                                </button>
+                            ))}
+                        </div>
                     </header>
 
                     <div className="flex-1 flex overflow-hidden">
-                        {/* 메인 리스트 */}
                         <main className="flex-1 overflow-auto custom-scrollbar">
-                            <table className="w-full border-collapse table-fixed">
-                                <thead className="sticky top-0 bg-slate-50 border-b-2">
+                            <table className="w-full border-collapse table-fixed text-left">
+                                <thead className="sticky top-0 bg-slate-50 border-b-2 z-10">
                                     <tr className="h-10 text-slate-700">
-                                        <th className="w-[110px] text-left px-3">차량번호</th>
-                                        <th className="w-[160px] text-left px-3">모델</th>
-                                        <th className="text-left px-4">트림/옵션</th>
-                                        {periods.map(p => <th key={p} className="w-[85px] text-right px-1 bg-blue-50/30">{p}개월</th>)}
+                                        <th className="w-[110px] px-3">차량번호</th>
+                                        <th className="w-[160px] px-3">모델</th>
+                                        <th className="px-4">트림/옵션</th>
+                                        {periods.map(p => selectedPeriods.includes(p) && (
+                                            <th key={p} className="w-[85px] text-right px-1 bg-blue-50/30">{p}개월</th>
+                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filtered.map((r, i) => (
-                                        <tr key={i} onClick={() => setSelectedCar(r)} className={`h-14 border-b cursor-pointer hover:bg-blue-50 ${selectedCar?._no === r._no ? 'bg-blue-50' : ''}`}>
+                                        <tr key={i} onClick={() => handleRowClick(r)} className={`h-14 border-b cursor-pointer hover:bg-blue-50 ${selectedCar?._no === r._no ? 'bg-blue-50' : ''}`}>
                                             <td className="px-3 font-mono">{r._no}</td>
                                             <td className="px-3 font-black text-slate-800">{r._md}</td>
                                             <td className="px-4 truncate text-slate-500">{r._tr}</td>
-                                            {periods.map(p => <td key={p} className="px-1 text-right font-black text-slate-900">{formatPrice(r[`${p}M`])}</td>)}
+                                            {periods.map(p => selectedPeriods.includes(p) && (
+                                                <td key={p} className="px-1 text-right font-black text-slate-900">{formatPrice(r[`${p}M`])}</td>
+                                            ))}
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </main>
 
-                        {/* 상세페이지 Aside */}
-                        <aside className={`fixed inset-y-0 right-0 w-[480px] bg-white shadow-2xl transition-transform duration-300 border-l z-[80] flex flex-col ${selectedCar ? 'translate-x-0' : 'translate-x-full'}`}>
+                        <aside className={`fixed inset-y-0 right-0 w-[480px] bg-white shadow-2xl border-l z-[80] flex flex-col transition-transform
+                            ${selectedCar ? 'translate-x-0 duration-300' : 'translate-x-full duration-0'}`}>
                             {selectedCar && (
-                                <>
-                                    <div className="h-12 border-b flex justify-between items-center px-5 bg-slate-50">
-                                        <span className="font-black text-slate-800 uppercase">차량 상세 정보 데이터 시트</span>
+                                <div key={selectedCar._no} className="flex flex-col h-full overflow-hidden">
+                                    <div className="h-12 border-b flex justify-between items-center px-5 bg-slate-50 shrink-0">
+                                        <span className="font-black text-slate-800 uppercase text-[11px]">차량 상세 정보 데이터 시트</span>
                                         <button onClick={() => setSelectedCar(null)} className="p-1 hover:bg-slate-200 transition-colors"><i className="lucide-x"></i></button>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-6 space-y-10 pb-32 bg-white custom-scrollbar">
-                                        {/* 01. 차량정보 */}
                                         <section>
                                             <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
                                                 <div className="w-1.5 h-3 bg-slate-800" />
                                                 <h3 className="text-slate-900 font-black text-[12px]">01. 차량정보</h3>
                                             </div>
-                                            <div className="border border-slate-300 divide-y divide-slate-200">
+                                            <div className="border border-slate-300 divide-y divide-slate-200 text-left">
                                                 {Object.entries(selectedCar).map(([k, v]) => k.startsWith('차량정보_') && !k.includes('링크') && (
                                                     <div key={k} className="flex p-3 bg-white">
                                                         <span className="w-28 text-slate-400 text-[10px] shrink-0">{k.replace('차량정보_', '')}</span>
@@ -136,14 +246,13 @@
                                             </div>
                                         </section>
 
-                                        {/* 02. 대여료정보 */}
                                         <section>
                                             <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
                                                 <div className="w-1.5 h-3 bg-slate-800" />
                                                 <h3 className="text-slate-900 font-black text-[12px]">02. 대여료정보</h3>
                                             </div>
                                             <table className="w-full border border-slate-300 text-[11px]">
-                                                <thead className="bg-slate-50 border-b border-slate-300 text-slate-500">
+                                                <thead className="bg-slate-50 border-b border-slate-300 text-slate-500 text-center font-bold">
                                                     <tr><th className="py-2 border-r">대여기간</th><th className="border-r">월 대여료</th><th>보증금</th></tr>
                                                 </thead>
                                                 <tbody>
@@ -158,13 +267,12 @@
                                             </table>
                                         </section>
 
-                                        {/* 03. 보험/계약정보 */}
                                         <section>
                                             <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
                                                 <div className="w-1.5 h-3 bg-slate-800" />
                                                 <h3 className="text-slate-900 font-black text-[12px]">03. 보험/계약정보</h3>
                                             </div>
-                                            <div className="border border-slate-300 divide-y divide-slate-200">
+                                            <div className="border border-slate-300 divide-y divide-slate-200 text-left">
                                                 {Object.entries(selectedCar).map(([k, v]) => (k.startsWith('보험정보_') || k.startsWith('계약정보_')) && (
                                                     <div key={k} className="flex p-3 bg-white">
                                                         <span className="w-28 text-slate-400 text-[10px] shrink-0">{k.split('_')[1]}</span>
@@ -178,13 +286,12 @@
                                             </div>
                                         </section>
 
-                                        {/* 04. 담당자정보 (마지막 섹션) */}
                                         <section>
                                             <div className="flex items-center gap-2 mb-3 border-b-2 border-slate-800 pb-1">
                                                 <div className="w-1.5 h-3 bg-slate-800" />
                                                 <h3 className="text-slate-900 font-black text-[12px]">04. 담당자정보</h3>
                                             </div>
-                                            <div className="border-2 border-slate-800 p-4 flex justify-between items-center bg-white shadow-sm">
+                                            <div className="border-2 border-slate-800 p-4 flex justify-between items-center bg-white shadow-sm text-left">
                                                 <div className="space-y-1">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[12px] font-black text-slate-800">{manager.성함직책}</span>
@@ -195,20 +302,13 @@
                                                 <i className="lucide-user text-slate-200 text-3xl"></i>
                                             </div>
                                         </section>
-                                        
-                                        {/* 06번 섹션 코드가 완전히 제거되었습니다. */}
                                     </div>
 
-                                    {/* 하단 버튼 */}
-                                    <div className="p-5 border-t border-slate-300 bg-white shrink-0 grid grid-cols-2 gap-2">
-                                        <button className="flex items-center justify-center gap-2 bg-slate-800 text-white py-4 text-[11px] font-black hover:bg-slate-900 border border-slate-800 shadow-md transition-all active:scale-95">
-                                            링크 공유
-                                        </button>
-                                        <button className="flex items-center justify-center gap-2 bg-white text-slate-800 py-4 text-[11px] font-black hover:bg-slate-50 border border-slate-800 shadow-sm transition-all active:scale-95">
-                                            영업 견적 복사
-                                        </button>
+                                    <div className="p-5 border-t border-slate-300 bg-white shrink-0 grid grid-cols-2 gap-2 shadow-inner">
+                                        <button onClick={handleShareLink} className="flex items-center justify-center gap-2 bg-slate-800 text-white py-4 rounded-none text-[11px] font-black hover:bg-slate-900 border border-slate-800 transition-all active:scale-95">링크 공유</button>
+                                        <button onClick={handleCopyQuote} className="flex items-center justify-center gap-2 bg-white text-slate-800 py-4 rounded-none text-[11px] font-black hover:bg-slate-50 border border-slate-800 transition-all active:scale-95">영업 견적 복사</button>
                                     </div>
-                                </>
+                                </div>
                             )}
                         </aside>
                     </div>
