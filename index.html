@@ -53,7 +53,7 @@
         .apply-btn-shadow:hover { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
         .apply-btn-shadow:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1); }
         
-        /* [수정] 상세 페이지 서랍형 슬라이드 애니메이션 (우->좌) */
+        /* 상세 페이지 서랍형 슬라이드 애니메이션 (우->좌) */
         @keyframes drawerAppear { 
             0% { transform: translateX(100%); } 
             100% { transform: translateX(0); } 
@@ -61,17 +61,18 @@
         .animate-drawer-reset { animation: drawerAppear 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
     </style>
 </head>
-<!-- [수정] 마우스 오른쪽 버튼 차단 속성(oncontextmenu) 추가 -->
+<!-- 마우스 오른쪽 버튼 차단 속성(oncontextmenu) 유지 -->
 <body class="overflow-hidden select-none border-none" oncontextmenu="return false">
 
-<div id="app" class="flex h-screen overflow-hidden text-[11px]">
+<!-- 접속 코드 게이트 UI 제거 (나중에 최종 버전에서 구현 예정) -->
+
+<div id="app" class="flex h-screen overflow-hidden text-[11px] opacity-100 transition-opacity duration-700">
     <!-- 좌측 필터바 -->
     <div class="w-[72px] bg-white flex flex-col z-[60] flex-shrink-0 border-r border-slate-200 relative sidebar-elevation">
         <div class="mt-[80px] flex flex-col items-center gap-2 px-1.5" id="sidebar-btns"></div>
     </div>
 
     <!-- 메인 영역 -->
-    <!-- [수정] 메인 영역 클릭 시 상세페이지가 닫히도록 onclick 추가 (무관한 곳 클릭 감지) -->
     <div class="flex-1 flex flex-col min-w-0 relative" onclick="closeDetail()">
         <header class="h-[50px] bg-white border-b border-slate-200 flex items-center px-4 gap-4 flex-shrink-0 z-20 shadow-sm" onclick="event.stopPropagation(); closeDetail();">
             <div class="flex items-center gap-3 flex-1 max-w-2xl" onclick="event.stopPropagation()">
@@ -85,7 +86,6 @@
             </div>
 
             <div class="ml-auto flex items-center gap-4" onclick="event.stopPropagation()">
-                <!-- [수정] 최신화 완료 메시지 레이어: 오해 소지가 있는 단어 제거 -->
                 <div id="toast-msg" class="opacity-0 transition-all duration-500 bg-blue-600 text-white px-2 py-1 text-[9px] font-black rounded-sm shadow-sm pointer-events-none">데이터 연동이 완료되었습니다</div>
                 
                 <div class="flex items-center gap-1.5">
@@ -112,13 +112,49 @@
         </div>
 
         <!-- 상세 페이지 Drawer -->
-        <!-- [수정] 클릭 전파 방지 유지 및 transition 제거하여 닫을 때 '즉시' 사라지게 함 -->
         <div id="detail-drawer" onclick="event.stopPropagation()" class="absolute right-0 top-0 h-full w-[440px] bg-white natural-shadow z-[100] flex flex-col border-l border-slate-200 translate-x-full"></div>
     </div>
 </div>
 
-<!-- 팝업 오버레이 (영역 외 클릭 시 닫기용) -->
 <div id="popup-overlay" class="fixed inset-0 z-[70] pointer-events-none" onclick="closeAllPopups()"></div>
+
+<!-- Firebase 라이브러리 및 설정 -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    // 전역 변수 공유
+    window.db = db;
+    window.auth = auth;
+    window.appId = appId;
+    window.setDoc = setDoc;
+    window.doc = doc;
+    window.getDoc = getDoc;
+
+    const initAuth = async () => {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            state.authorized = true;
+            fetchData(false);
+        } else {
+            initAuth();
+        }
+    });
+</script>
 
 <script>
     // --- [CONFIG & STATE] ---
@@ -139,7 +175,8 @@
             nameTitle: localStorage.getItem('erp_manager_nameTitle') || '',
             phone: localStorage.getItem('erp_manager_phone') || '',
             includeAccount: localStorage.getItem('erp_manager_includeAcc') === 'true'
-        }
+        },
+        authorized: true 
     };
 
     const baseColumns = { "상태": "차량_상태", "구분": "차량_구분", "차량번호": "차량_번호", "제조사": "차량_제조사", "모델": "차량_모델명", "세부모델": "차량_세부모델", "세부트림(선택옵션)": "차량_세부트림", "외부색상": "차량_외부색상", "내부색상": "차량_내부색상", "주행거리": "차량_현재주행거리" };
@@ -159,8 +196,50 @@
     };
     const formatPrice = (val) => parseNum(val).toLocaleString();
     const formatPeriod = (p) => p ? p.replace('M', '개월') : "";
+    
+    const formatDeductible = (val) => {
+        if (!val || val === '-' || val === '0' || val === '없음') return '없음';
+        const strVal = String(val).trim();
+        if (/^\d+$/.test(strVal)) return strVal + '만원';
+        return strVal;
+    };
 
-    // --- [CORE LOGIC: StatusBadge] ---
+    const formatPercent = (val) => {
+        if (!val || val === '-' || val === '0') return '30%';
+        const strVal = String(val).trim();
+        if (/^\d+$/.test(strVal)) return strVal + '%';
+        return strVal;
+    };
+
+    // [추가] 계약 옵션 포맷 유틸리티: +, / 월 양식 통일
+    const formatContractOption = (val) => {
+        const v = String(val || '').trim();
+        if (!v || v === '-' || v === '0' || v === '운영안함') return '운영안함';
+        if (v.includes('%')) return `+대여료의 ${v} / 월`;
+        const n = parseInt(v.replace(/[^0-9]/g, ''));
+        return !isNaN(n) ? `+${n.toLocaleString()}원 / 월` : `+${v} / 월`;
+    };
+
+    const getBatteryCapacity = (c) => {
+        const isEV = String(c.차량_연료).includes('전기');
+        if (!isEV) return null;
+        let cap = String(c.차량_배터리용량 || c.차량_배기량 || '').trim();
+        if (cap && cap !== '-' && cap !== '0' && isNaN(parseInt(cap)) === false) {
+            return /^\d+$/.test(cap) ? cap + 'kWh' : cap;
+        }
+        const model = String(c.차량_모델명 + c.차량_세부모델);
+        if (model.includes('아이오닉5') || model.includes('EV6') || model.includes('아이오닉6')) return '77.4kWh';
+        if (model.includes('포터') || model.includes('봉고')) return '58.8kWh';
+        if (model.includes('테슬라') && (model.includes('Long') || model.includes('롱레인지'))) return '82kWh';
+        if (model.includes('테슬라') && model.includes('Model Y')) return '60kWh';
+        if (model.includes('EV3')) return '81.4kWh';
+        if (model.includes('레이')) return '35.2kWh';
+        if (model.includes('캐스퍼')) return '49kWh';
+        if (model.includes('코나') || model.includes('니로')) return '64.8kWh';
+        if (model.includes('GV60')) return '77.4kWh';
+        return '확인필요';
+    };
+
     function getStatusBadgeHtml(text, type) {
         if (!text) return '';
         let colorClass = "bg-slate-100 text-slate-600 border-slate-200";
@@ -176,17 +255,10 @@
         return `<span class="inline-flex items-center justify-center px-1.5 py-0.5 border text-[10px] font-black leading-none whitespace-nowrap rounded-none ${colorClass}">${text}</span>`;
     }
 
-    // --- [DATA FETCHING: 최신화 아이콘 스핀 제어 및 알림 멘트 추가] ---
     async function fetchData(isManual = false) {
         const icon = document.getElementById('refresh-icon');
         const toast = document.getElementById('toast-msg');
-        
-        // 수동 클릭인 경우에만 스핀 동작 시작
-        if (isManual) {
-            icon.classList.add('animate-spin');
-            toast.classList.replace('opacity-100', 'opacity-0');
-        }
-
+        if (isManual) { icon.classList.add('animate-spin'); toast.classList.remove('opacity-100'); toast.classList.add('opacity-0'); }
         try {
             const res = await fetch(`${CSV_URL}&cachebust=${Date.now()}`);
             const text = await res.text();
@@ -196,28 +268,18 @@
                 const values = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v ? v.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : "");
                 return headers.reduce((obj, header, i) => { obj[header] = values[i] || ""; return obj; }, {});
             });
-            
+            const params = new URLSearchParams(window.location.search);
+            const carNo = params.get('car');
+            if (carNo && !state.selectedCar) {
+                const targetCar = rawData.find(c => c.차량_번호 === carNo);
+                if (targetCar) { state.selectedCar = targetCar; }
+            }
             render();
-
-            // [수정] 데이터 로드 및 렌더링이 성공적으로 완료되었을 때만 멘트 출력
-            if (isManual) {
-                toast.classList.remove('opacity-0');
-                toast.classList.add('opacity-100');
-                setTimeout(() => {
-                    toast.classList.replace('opacity-100', 'opacity-0');
-                }, 2000);
-            }
-        } catch (e) { 
-            console.error("Data fetch error", e); 
-        } finally {
-            // [수정] 로직이 완전히 종료되면 스핀 즉시 정지
-            if (isManual) {
-                icon.classList.remove('animate-spin');
-            }
-        }
+            if (isManual) { toast.classList.remove('opacity-0'); toast.classList.add('opacity-100'); setTimeout(() => { toast.classList.replace('opacity-100', 'opacity-0'); }, 2000); }
+        } catch (e) { console.error("Data fetch error", e); } 
+        finally { if (isManual) { icon.classList.remove('animate-spin'); } }
     }
 
-    // --- [FILTERING ENGINE] ---
     function getProcessedData() {
         let result = rawData.filter(item => {
             const matchesSearch = Object.values(item).some(v => String(v).toLowerCase().includes(state.searchTerm.toLowerCase()));
@@ -225,7 +287,6 @@
                 if (!selectedValues || selectedValues.length === 0) return true;
                 return selectedValues.includes(String(item[col]));
             });
-            
             let matchesRental = true;
             if (state.sidebarFilters.rental.length > 0) {
                 const periodKey = `금액_대여료_${state.selectedPeriods[0] || '24M'}`;
@@ -237,7 +298,6 @@
                     return val >= low && val < high;
                 });
             }
-
             let matchesDeposit = true;
             if (state.sidebarFilters.deposit.length > 0) {
                 const periodKey = `금액_보증금_${state.selectedPeriods[0] || '24M'}`;
@@ -249,7 +309,6 @@
                     return val >= low && val < high;
                 });
             }
-
             let matchesMileage = true;
             if (state.sidebarFilters.mileage.length > 0) {
                 const val = parseNum(item.차량_현재주행거리);
@@ -262,15 +321,14 @@
                     return false;
                 });
             }
-            
             let matchesYear = true;
             if (state.sidebarFilters.year.length > 0) {
                 const rawDate = item.차량_최초등록일 || item['최초등록일'] || "";
                 if (!rawDate) matchesYear = false;
                 else {
                     try {
-                        const now = new Date('2026-02-02');
                         const regDate = new Date(String(rawDate).replace(/\./g, '-'));
+                        const now = new Date();
                         const diffTime = Math.abs(now - regDate);
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         const ageYears = diffDays / 365;
@@ -284,17 +342,13 @@
                     } catch (e) { matchesYear = false; }
                 }
             }
-
             return matchesSearch && matchesColumnFilters && matchesRental && matchesDeposit && matchesMileage && matchesYear;
         });
-
         if (state.sortConfig.key) {
             result.sort((a, b) => {
                 let aVal = a[state.sortConfig.key] || "";
                 let bVal = b[state.sortConfig.key] || "";
-                if (state.sortConfig.key === '차량_현재주행거리' || state.sortConfig.key.includes('금액')) {
-                    aVal = parseNum(aVal); bVal = parseNum(bVal);
-                }
+                if (state.sortConfig.key === '차량_현재주행거리' || state.sortConfig.key.includes('금액')) { aVal = parseNum(aVal); bVal = parseNum(bVal); }
                 if (aVal < bVal) return state.sortConfig.direction === 'asc' ? -1 : 1;
                 if (aVal > bVal) return state.sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
@@ -303,25 +357,16 @@
         return result;
     }
 
-    // --- [RENDERERS] ---
     function render() {
         const filtered = getProcessedData();
         document.getElementById('data-count').innerText = filtered.length;
-        
-        renderSidebar();
-        renderHeader();
-        renderTable(filtered);
-        renderDetail();
-        renderPopups();
+        renderSidebar(); renderHeader(); renderTable(filtered); renderDetail(); renderPopups();
         lucide.createIcons();
     }
 
     function renderSidebar() {
-        const btns = [
-            { id: 'period', label: '기간' }, { id: 'rental', label: '대여료' },
-            { id: 'deposit', label: '보증금' }, { id: 'mileage', label: '주행거리' }, { id: 'year', label: '연식' }
-        ];
-        document.getElementById('sidebar-btns').innerHTML = btns.map((b, idx) => {
+        const btns = [ { id: 'period', label: '기간' }, { id: 'rental', label: '대여료' }, { id: 'deposit', label: '보증금' }, { id: 'mileage', label: '주행거리' }, { id: 'year', label: '연식' } ];
+        document.getElementById('sidebar-btns').innerHTML = btns.map((b) => {
             const isActive = state.activeSidebarPopup === b.id;
             const isFiltered = b.id === 'period' ? state.selectedPeriods.length > 0 : state.sidebarFilters[b.id]?.length > 0;
             return `
@@ -337,24 +382,13 @@
 
     function renderHeader() {
         let html = '';
-        Object.keys(baseColumns).forEach((label, idx) => {
+        Object.keys(baseColumns).forEach((label) => {
             const dataKey = baseColumns[label];
             const isFiltered = (state.columnFilters[dataKey] || []).length > 0;
             const isSorted = state.sortConfig.key === dataKey;
             const isActive = state.activeFilterColumn === dataKey;
-            
-            // [수정] 필터 가능 여부 확인
             const isFilterable = filterableColumns.includes(label);
-
-            let columnWidth = (label === '상태' || label === '구분') ? "w-[72px]" : 
-                             label === '차량번호' ? "w-[100px]" : 
-                             label === '제조사' ? "w-[90px]" : 
-                             label === '모델' ? "w-[110px]" : 
-                             label === '세부모델' ? "w-[120px]" : 
-                             label === '세부트림(선택옵션)' ? "w-[160px]" : 
-                             label === '외부색상' || label === '내부색상' ? "w-[85px]" : 
-                             label === '주행거리' ? "w-[105px]" : "w-auto";
-
+            let columnWidth = (label === '상태' || label === '구분') ? "w-[72px]" : label === '차량번호' ? "w-[100px]" : label === '제조사' ? "w-[90px]" : label === '모델' ? "w-[110px]" : label === '세부모델' ? "w-[120px]" : label === '세부트림(선택옵션)' ? "w-[160px]" : label === '외부색상' || label === '내부색상' ? "w-[85px]" : label === '주행거리' ? "w-[105px]" : "w-auto";
             html += `
                 <th class="py-2 px-1 relative transition-colors border-b border-slate-200 ${isSorted || isActive ? 'bg-blue-50' : ''} ${columnWidth}">
                     <div ${isFilterable ? `onclick="toggleColumnFilter('${dataKey}'); event.stopPropagation();"` : ""} class="flex flex-row items-center justify-center gap-1 leading-tight h-full relative overflow-hidden ${isFilterable ? 'cursor-pointer' : ''}">
@@ -369,8 +403,8 @@
             const isSorted = state.sortConfig.key === `금액_대여료_${p}`;
             html += `
                 <th class="py-2 px-1 relative w-[105px] bg-blue-50 border-l border-blue-100 text-blue-800 ${isSorted ? 'bg-blue-100' : ''}">
-                    <div class="flex flex-row items-center justify-center gap-1 leading-tight h-full font-black">
-                        <div class="flex flex-col items-center">
+                    <div class="flex flex-row items-center justify-center gap-1 leading-tight h-full font-black text-center text-center">
+                        <div class="flex flex-col items-center text-center w-full">
                             <span class="text-[10px] uppercase">${formatPeriod(p)} 대여료</span>
                             <span class="text-[9px] opacity-70 font-bold">(보증금)</span>
                         </div>
@@ -399,7 +433,7 @@
                 <td class="p-2 truncate text-slate-500 whitespace-nowrap font-medium text-center">${item.차량_내부색상 || '-'}</td>
                 <td class="p-2 truncate text-right font-bold text-slate-700 pr-6">${formatPrice(item.차량_현재주행거리)}km</td>
                 ${state.selectedPeriods.map(p => `
-                    <td class="p-2 bg-blue-50/30 text-blue-800 font-black text-right pr-6 leading-none">
+                    <td class="p-2 bg-blue-50/30 text-blue-800 font-black text-right pr-6 leading-none text-right">
                         <div class="text-[12px]">${item[`금액_대여료_${p}`] || '-'}</div>
                         <div class="text-slate-400 font-bold text-[9px] mt-1">${item[`금액_보증금_${p}`] || '-'}</div>
                     </td>
@@ -408,25 +442,15 @@
         `).join('');
     }
 
-    // [수정] renderDetail: 1번 비고 배지/대괄호 제거 및 3번 보험 구글시트 변수 기반 반영
+    // [수정] renderDetail: 4번 항목의 표시 양식을 '+금액 / 월' 또는 '+대여료의 0% / 월'로 정밀 통일
     function renderDetail() {
         const drawer = document.getElementById('detail-drawer');
-        
-        // 상세 데이터가 없으면 즉시 사라지게 처리
-        if (!state.selectedCar) { 
-            drawer.classList.add('translate-x-full'); 
-            drawer.classList.remove('animate-drawer-reset');
-            return; 
-        }
-        
+        if (!state.selectedCar) { drawer.classList.add('translate-x-full'); drawer.classList.remove('animate-drawer-reset'); return; }
         const c = state.selectedCar;
-        
-        // 새로운 상품 클릭 시 애니메이션 초기화를 위한 강제 리플로우
-        drawer.classList.remove('animate-drawer-reset');
-        void drawer.offsetWidth; 
-        
-        drawer.classList.remove('translate-x-full');
-        drawer.classList.add('animate-drawer-reset');
+        drawer.classList.remove('animate-drawer-reset'); void drawer.offsetWidth; 
+        drawer.classList.remove('translate-x-full'); drawer.classList.add('animate-drawer-reset');
+        const isEV = String(c.차량_연료).includes('전기');
+        const evCapacity = getBatteryCapacity(c);
 
         drawer.innerHTML = `
             <div class="h-[50px] flex justify-between items-center px-4 bg-white border-b border-slate-100 text-slate-800 flex-shrink-0">
@@ -434,11 +458,8 @@
                 <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-800 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-3 space-y-3 bg-white text-[11px] text-slate-800 hide-scrollbar">
-                <!-- 1. 차량 상세 제원 -->
                 <section class="border border-slate-200 bg-white rounded-none overflow-hidden shadow-sm">
-                    <div class="bg-slate-50 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
-                        <span class="font-black text-[11px] text-slate-600 uppercase tracking-tighter">1. 차량 상세 제원</span>
-                    </div>
+                    <div class="bg-slate-50 px-3 py-2 border-b border-slate-200 flex justify-between items-center"><span class="font-black text-[11px] text-slate-600 uppercase tracking-tighter">1. 차량 상세 제원</span></div>
                     <div class="p-3 space-y-3.5">
                         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                             <div class="flex items-center gap-2 flex-wrap">
@@ -446,10 +467,7 @@
                                 <span class="font-black text-[12px] text-slate-900">${c.차량_제조사} ${c.차량_모델명}</span>
                                 <span class="font-bold text-[11px] text-slate-500 uppercase">${c.차량_연료}</span>
                             </div>
-                            <div class="flex gap-1 flex-shrink-0">
-                                ${getStatusBadgeHtml(c.차량_구분, "구분")}
-                                ${getStatusBadgeHtml(c.차량_상태, "상태")}
-                            </div>
+                            <div class="flex gap-1 flex-shrink-0">${getStatusBadgeHtml(c.차량_구분, "구분")}${getStatusBadgeHtml(c.차량_상태, "상태")}</div>
                         </div>
                         <div class="space-y-1.5">
                             <div class="flex gap-2 items-start"><span class="text-slate-400 font-bold w-[60px] flex-shrink-0 text-[10px] uppercase">세부모델</span><span class="font-black text-slate-900">${c.차량_세부모델}</span></div>
@@ -459,86 +477,73 @@
                         </div>
                         <div class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-3">
                             <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">주행거리</span><span class="font-black text-blue-700">${formatPrice(c.차량_현재주행거리)}km</span></div>
-                            <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">배기량</span><span class="font-black">${c.차량_배기량 ? formatPrice(c.차량_배기량)+'cc' : '-'}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">${isEV ? '배터리 용량' : '배기량'}</span><span class="font-black">${isEV ? evCapacity : (c.차량_배기량 ? formatPrice(c.차량_배기량)+'cc' : '-')}</span></div>
                             <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">최초등록</span><span class="font-black">${c.차량_최초등록일}</span></div>
                             <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">차령만료</span><span class="font-black text-rose-600">${c.차령만료일 || '-'}</span></div>
                             <div class="col-span-2 flex flex-col mt-1 p-2.5 bg-slate-50 border border-slate-100">
-                                <span class="text-slate-400 font-black text-[9px] uppercase mb-1.5">차량 세부 상태 및 비고</span>
-                                <div class="flex items-start gap-2">
-                                    <span class="font-medium text-slate-700 leading-relaxed">
-                                        ${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '입력된 특이사항이 없습니다.'}
-                                    </span>
-                                </div>
+                                <span class="text-slate-400 font-black text-[9px] uppercase mb-1.5 text-left">차량 세부 상태 및 비고</span>
+                                <div class="flex items-start gap-2"><span class="font-medium text-slate-700 leading-relaxed text-left">${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '입력된 내용이 없습니다.'}</span></div>
                             </div>
                         </div>
                         <button onclick="window.open('${c.차량_사진링크}','_blank')" class="w-full py-3 bg-white border border-slate-300 font-black text-[10px] uppercase apply-btn-shadow">차량 사진 확인 (링크)</button>
                     </div>
                 </section>
-
-                <!-- 2. 대여료 및 보증금 안내 -->
                 <section class="border border-slate-200 bg-white shadow-sm overflow-hidden">
                     <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">2. 대여료 및 보증금 안내</div>
-                    <table class="w-full text-center text-[11px] border-collapse">
-                        <thead class="bg-[#f8f9fb] border-b font-bold text-slate-500 uppercase">
+                    <table class="w-full text-center text-[11px] border-collapse border-x-0">
+                        <thead class="bg-slate-50 border-b font-bold text-slate-500 uppercase">
                             <tr><th class="py-2">계약기간</th><th class="py-2 text-blue-800 text-right pr-4">월 대여료</th><th class="py-2 text-right pr-4 text-slate-400">보증금</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium">
                             ${['6M', '12M', '24M', '36M', '48M', '60M'].map(m => {
-                                const fee = c[`금액_대여료_${m}`];
-                                const dep = c[`금액_보증금_${m}`];
+                                const fee = c[`금액_대여료_${m}`]; const dep = c[`금액_보증금_${m}`];
                                 if (!fee || fee === '-' || fee === '0' || fee === '0원') return '';
-                                return `<tr class="divide-x"><td class="py-2 font-black uppercase">${formatPeriod(m)}</td><td class="py-2 text-blue-800 font-black text-right pr-4">${fee}원</td><td class="py-2 text-slate-500 text-right pr-4">${dep}원</td></tr>`;
+                                return `<tr><td class="py-2 font-black uppercase">${formatPeriod(m)}</td><td class="py-2 text-blue-800 font-black text-right pr-4">${fee}원</td><td class="py-2 text-slate-500 text-right pr-4">${dep}원</td></tr>`;
                             }).join('')}
                         </tbody>
                     </table>
                 </section>
-
-                <!-- 3. 보험 보상 상세 -->
                 <section class="border border-slate-200 bg-white rounded-none overflow-hidden shadow-sm">
                     <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">3. 보험 보상 및 공통 면책 조건</div>
-                    <table class="w-full text-center border-collapse text-[10px]">
-                        <thead class="bg-slate-50 font-bold text-slate-400 uppercase">
-                            <tr class="divide-x divide-slate-200 border-b border-slate-200"><th class="py-2 px-2 text-left">보상 항목</th><th class="py-2 px-2">보상 한도</th><th class="py-2 px-2 text-right pr-4">면책금</th></tr>
+                    <table class="w-full text-center border-collapse text-[10px] border-x-0">
+                        <thead class="bg-slate-50 font-bold text-slate-400 uppercase border-b">
+                            <tr><th class="py-2 px-2 text-left">보상 항목</th><th class="py-2 px-2">보상 한도</th><th class="py-2 px-2 text-right pr-4">면책금</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-800 font-bold uppercase tracking-tighter">
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">대인 배상</td><td class="p-2 font-black">${c.보험_대인한도 || '무한'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_대인면책 || '0원'}</td></tr>
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">대물 배상</td><td class="p-2 font-black">${c.보험_대물한도 || '1억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_대물면책 || '10만'}</td></tr>
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">자기신체(자손)</td><td class="p-2 font-black">${c.보험_자손한도 || '3천만'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_자손면책 || '없음'}</td></tr>
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">무보험차 상해</td><td class="p-2 font-black">${c.보험_무보험한도 || '2억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_무보험면책 || '없음'}</td></tr>
-                            <tr class="divide-x bg-blue-50/20"><td class="p-2 text-left text-slate-500 font-black">자기차량(자차)</td><td class="p-2 font-black">${c.보험_자차한도 || '차량가액 한도'}</td><td class="p-2 text-right text-rose-700 pr-4">수리비 ${c.보험_자차수리비율 || '20%'} (${c.보험_자차최소 || '20만'}~${c.보험_자차최대 || '50만'})</td></tr>
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">긴급출동</td><td class="p-2 font-black">${c.보험_긴급출동 || '연 5회'}</td><td class="p-2 text-right text-blue-800 pr-4">-</td></tr>
+                            <tr class="text-center"><td class="p-2 text-left text-slate-500 font-black">대인 배상</td><td class="p-2 font-black">${c.보험_대인한도 || '무한'}</td><td class="p-2 text-right text-blue-800 pr-4">${formatDeductible(c.보험_대인면책)}</td></tr>
+                            <tr class="text-center"><td class="p-2 text-left text-slate-500 font-black">대물 배상</td><td class="p-2 font-black">${c.보험_대물한도 || '1억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${formatDeductible(c.보험_대물면책)}</td></tr>
+                            <tr class="text-center"><td class="p-2 text-left text-slate-500 font-black">자기신체(자손)</td><td class="p-2 font-black">${c.보험_자손한도 || '3천만'}</td><td class="p-2 text-right text-blue-800 pr-4">${formatDeductible(c.보험_자손면책)}</td></tr>
+                            <tr class="text-center"><td class="p-2 text-left text-slate-500 font-black">무보험차 상해</td><td class="p-2 font-black">${c.보험_무보험한도 || '2억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${formatDeductible(c.보험_무보험면책)}</td></tr>
+                            <tr class="bg-blue-50/20 text-center"><td class="p-2 text-left text-slate-500 font-black">자기차량(자차)</td><td class="p-2 font-black">${c.보험_자차한도 || '차량가액 한도'}</td><td class="p-2 text-right text-rose-700 pr-4">수리비의 ${formatPercent(c.보험_자차수리비율)}, 최소 ${formatDeductible(c.보험_자차면책최소)} ~ 최대 ${formatDeductible(c.보험_자차면책최대)}</td></tr>
+                            <tr class="text-center"><td class="p-2 text-left text-slate-500 font-black">긴급출동</td><td class="p-2 font-black">${c.보험_긴급출동 || '연 5회'}</td><td class="p-2 text-right text-blue-800 pr-4">-</td></tr>
                         </tbody>
                     </table>
                 </section>
-
-                <!-- 4. 계약 정책 및 연령/거리 옵션 -->
                 <section class="border border-slate-200 bg-white rounded-none overflow-hidden shadow-sm">
                     <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">4. 계약 정책 및 연령/거리 옵션</div>
-                    <div class="grid grid-cols-2 divide-x divide-slate-100 border-b bg-white">
-                        <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">기본연령</span><span class="font-black">${c.계약_기본운전연령 || '만 26세'}</span></div>
-                        <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">약정거리</span><span class="font-black">${c.계약_약정주행거리 || '2만km'}</span></div>
-                    </div>
-                    <div class="divide-y divide-slate-100 text-slate-800 bg-white">
+                    <div class="divide-y divide-slate-100">
+                        <div class="grid grid-cols-2 divide-x divide-slate-100">
+                            <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">기본연령</span><span class="font-black">${c.계약_기본운전연령 || '만 26세'}</span></div>
+                            <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">약정거리</span><span class="font-black">${c.계약_약정주행거리 || '2만km'}</span></div>
+                        </div>
                         <div class="flex justify-between p-2.5 hover:bg-slate-50 transition-colors">
                             <span class="text-slate-500 font-bold uppercase">만 21세 연령 하향</span>
-                            <span class="font-black ${parseNum(c.계약_21세추가금) > 0 ? 'text-blue-700' : 'text-slate-400 italic'}">${parseNum(c.계약_21세추가금) > 0 ? '+'+formatPrice(c.계약_21세추가금)+'원/월' : '운영안함'}</span>
+                            <span class="font-black ${parseNum(c.계약_21세추가금) > 0 || String(c.계약_21세추가금).includes('%') ? 'text-blue-700' : 'text-slate-400 italic'}">${formatContractOption(c.계약_21세추가금)}</span>
                         </div>
                         <div class="flex justify-between p-2.5 hover:bg-slate-50 transition-colors">
                             <span class="text-slate-500 font-bold uppercase">만 23세 연령 하향</span>
-                            <span class="font-black ${parseNum(c.계약_23세추가금) > 0 ? 'text-blue-700' : 'text-slate-400 italic'}">${parseNum(c.계약_23세추가금) > 0 ? '+'+formatPrice(c.계약_23세추가금)+'원/월' : '운영안함'}</span>
+                            <span class="font-black ${parseNum(c.계약_23세추가금) > 0 || String(c.계약_23세추가금).includes('%') ? 'text-blue-700' : 'text-slate-400 italic'}">${formatContractOption(c.계약_23세추가금)}</span>
                         </div>
                         <div class="flex justify-between p-2.5 hover:bg-slate-50 transition-colors">
                             <span class="text-slate-500 font-bold uppercase">연간 1만km 거리 추가</span>
-                            <span class="font-black text-blue-700">+${formatPrice(c.계약_주행거리추가금)}원/월</span>
+                            <span class="font-black text-blue-700">${formatContractOption(c.계약_1만Km추가금)}</span>
                         </div>
-                        <div class="flex flex-col p-2.5 bg-slate-50 border-t border-slate-100">
-                            <span class="text-slate-400 font-black text-[9px] uppercase mb-1.5">계약 관련 특이사항</span>
-                            <div class="font-medium text-slate-700 leading-relaxed">${c.계약_비고 || '별도의 계약 특이사항이 없습니다.'}</div>
+                        <div class="flex flex-col p-2.5 bg-slate-50">
+                            <span class="text-slate-400 font-black text-[9px] uppercase mb-1.5 text-left">계약 관련 특이사항 및 비고</span>
+                            <div class="font-medium text-slate-700 leading-relaxed text-left">${c.계약_비고 || '입력된 내용이 없습니다.'}</div>
                         </div>
                     </div>
                 </section>
-
-                <!-- 5. 담당자 및 입금 계좌 안내 -->
                 <section class="border border-slate-200 bg-white shadow-sm overflow-hidden">
                     <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">5. 담당자 및 입금 계좌 안내</div>
                     <div class="p-3 space-y-3 bg-white">
@@ -548,317 +553,102 @@
                             <input type="text" id="mgr-ph" placeholder="연락처" oninput="updateManagerInfo()" value="${state.managerInfo.phone}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800 col-span-2">
                         </div>
                         <div class="pt-2 border-t border-slate-100 space-y-2">
-                            <label class="flex items-center gap-2 cursor-pointer group">
-                                <input type="checkbox" id="mgr-acc" onchange="updateManagerInfo()" ${state.managerInfo.includeAccount ? 'checked' : ''} class="w-4 h-4 accent-slate-800">
-                                <span class="font-black text-slate-800 group-hover:text-blue-700 transition-colors">입금 계좌 정보 포함하기</span>
-                            </label>
-                            ${state.managerInfo.includeAccount ? `
-                                <div class="p-3 bg-blue-50/50 border border-blue-100 text-center shadow-inner">
-                                    <p class="text-[11px] font-black text-blue-800 tracking-tighter uppercase mb-0.5">계좌: ${c.계약_입금계좌번호 || '미등록'}</p>
-                                    <p class="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">우리은행 (예금주: 프레패스)</p>
-                                </div>
-                            ` : ''}
+                            <label class="flex items-center gap-2 cursor-pointer group"><input type="checkbox" id="mgr-acc" onchange="updateManagerInfo()" ${state.managerInfo.includeAccount ? 'checked' : ''} class="w-4 h-4 accent-slate-800"><span class="font-black text-slate-800 group-hover:text-blue-700 transition-colors">입금 계좌 정보 포함하기</span></label>
+                            ${state.managerInfo.includeAccount ? `<div class="p-3 bg-blue-50/50 border border-blue-100 text-center shadow-inner text-center"><p class="text-[11px] font-black text-blue-800 tracking-tighter uppercase mb-0.5">계좌: ${c.계약_입금계좌번호 || '미등록'}</p><p class="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">우리은행 (예금주: 프레패스)</p></div>` : ''}
                         </div>
                     </div>
                 </section>
             </div>
             <div class="p-3 border-t bg-white flex-shrink-0 grid grid-cols-2 gap-3">
-                <button id="btn-copy-link" onclick="handleCopyLink()" class="py-3.5 bg-white border border-slate-300 text-slate-800 font-black text-[11px] uppercase tracking-widest apply-btn-shadow flex items-center justify-center gap-2">
-                    <i data-lucide="share-2" class="w-4 h-4"></i> 고객용 링크
-                </button>
-                <button id="btn-copy-summary" onclick="handleCopySummary()" class="py-3.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest apply-btn-shadow flex items-center justify-center gap-2">
-                    <i data-lucide="copy" class="w-4 h-4"></i> 전달용 텍스트
-                </button>
+                <button id="btn-copy-link" onclick="handleCopyLink()" class="py-3.5 bg-white border border-slate-300 text-slate-800 font-black text-[11px] uppercase tracking-widest apply-btn-shadow flex items-center justify-center gap-2"><i data-lucide="share-2" class="w-4 h-4"></i> 고객용 링크</button>
+                <button id="btn-copy-summary" onclick="handleCopySummary()" class="py-3.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest apply-btn-shadow flex items-center justify-center gap-2"><i data-lucide="copy" class="w-4 h-4"></i> 전달용 텍스트</button>
             </div>
         `;
         lucide.createIcons();
     }
 
-    // --- [POPUPS: 영역 외 클릭 감지 및 토글 로직] ---
     function renderPopups() {
-        const overlay = document.getElementById('popup-overlay');
-        overlay.innerHTML = '';
-        
-        // [수정] 상세 페이지 스크롤 허용을 위해 overlay 조건에서 state.selectedCar 제거
-        // 사이드바 팝업이나 컬럼 필터가 열렸을 때만 오버레이 활성화
-        if (state.activeSidebarPopup || state.activeFilterColumn) {
-            overlay.classList.remove('pointer-events-none');
-            overlay.classList.add('pointer-events-auto');
-        } else {
-            overlay.classList.remove('pointer-events-auto');
-            overlay.classList.add('pointer-events-none');
-        }
-
-        // 사이드바 필터 팝업
+        const overlay = document.getElementById('popup-overlay'); overlay.innerHTML = '';
+        if (state.activeSidebarPopup || state.activeFilterColumn) { overlay.classList.remove('pointer-events-none'); overlay.classList.add('pointer-events-auto'); } else { overlay.classList.remove('pointer-events-auto'); overlay.classList.add('pointer-events-none'); }
         if (state.activeSidebarPopup) {
-            const id = state.activeSidebarPopup;
-            const label = id==='period'?'기간':id==='rental'?'대여료':id==='deposit'?'보증금':id==='mileage'?'주행거리':'연식';
+            const id = state.activeSidebarPopup; const label = id==='period'?'기간':id==='rental'?'대여료':id==='deposit'?'보증금':id==='mileage'?'주행거리':'연식';
             const opts = id==='period'?['6M','12M','24M','36M','48M','60M']:id==='rental'?rentalOptions:id==='deposit'?depositOptions:id==='mileage'?mileageOptions:yearOptions;
             const btnRect = document.querySelector(`button[onclick*="${id}"]`).getBoundingClientRect();
-            
-            const popup = document.createElement('div');
-            popup.className = `absolute bg-white border border-slate-200 natural-shadow z-[100] w-[210px] rounded-none overflow-hidden flex flex-col`;
-            popup.style.left = `80px`;
-            popup.style.top = `${Math.min(btnRect.top, window.innerHeight - 320)}px`;
-            
-            popup.onclick = (e) => e.stopPropagation();
-
-            popup.innerHTML = `
-                <div class="p-3 border-b bg-slate-50 flex justify-between items-center">
-                    <span class="text-[11px] font-black text-slate-500 uppercase tracking-tighter">${label} 필터</span>
-                    <div class="flex items-center gap-2">
-                        <button onclick="resetSidebarFilter('${id}')" class="text-[10px] text-slate-400 font-black hover:text-blue-600 transition-colors">초기화</button>
-                        <button onclick="closeAllPopups()" class="text-slate-400 hover:text-slate-600 transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button>
-                    </div>
-                </div>
-                <div class="max-h-64 overflow-y-auto p-1 hide-scrollbar bg-white">
-                    ${opts.map(opt => {
-                        const isSelected = id === 'period' ? state.selectedPeriods.includes(opt) : state.sidebarFilters[id].includes(opt);
-                        return `
-                            <label class="flex items-center gap-2.5 p-2.5 hover:bg-slate-50 cursor-pointer transition-colors group">
-                                <input type="checkbox" onchange="toggleSidebarFilter('${id}', '${opt}')" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 accent-slate-800 rounded-none">
-                                <span class="truncate flex-1 font-bold ${isSelected ? 'text-slate-900' : 'text-slate-500'}">
-                                    ${id==='period'?formatPeriod(opt):opt}${id==='rental'||id==='deposit'?(opt.includes('만')?'':'만원'):''}
-                                </span>
-                            </label>
-                        `;
-                    }).join('')}
-                </div>
-                <div class="p-3 border-t bg-slate-50/30">
-                    <button onclick="closeAllPopups()" class="w-full py-2.5 bg-white border border-slate-200 text-slate-800 font-black text-[11px] uppercase tracking-widest apply-btn-shadow">필터 적용</button>
-                </div>
-            `;
+            const popup = document.createElement('div'); popup.className = `absolute bg-white border border-slate-200 natural-shadow z-[100] w-[210px] rounded-none overflow-hidden flex flex-col`; popup.style.left = `80px`; popup.style.top = `${Math.min(btnRect.top, window.innerHeight - 320)}px`; popup.onclick = (e) => e.stopPropagation();
+            popup.innerHTML = `<div class="p-3 border-b bg-slate-50 flex justify-between items-center"><span class="text-[11px] font-black text-slate-500 uppercase tracking-tighter">${label} 필터</span><div class="flex items-center gap-2"><button onclick="resetSidebarFilter('${id}')" class="text-[10px] text-slate-400 font-black hover:text-blue-600 transition-colors">초기화</button><button onclick="closeAllPopups()" class="text-slate-400 hover:text-slate-600 transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button></div></div><div class="max-h-64 overflow-y-auto p-1 hide-scrollbar bg-white">${opts.map(opt => { const isSelected = id === 'period' ? state.selectedPeriods.includes(opt) : state.sidebarFilters[id].includes(opt); return `<label class="flex items-center gap-2.5 p-2.5 hover:bg-slate-50 cursor-pointer transition-colors group"><input type="checkbox" onchange="toggleSidebarFilter('${id}', '${opt}')" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 accent-slate-800 rounded-none"><span class="truncate flex-1 font-bold ${isSelected ? 'text-slate-900' : 'text-slate-500'} text-left">${id==='period'?formatPeriod(opt):opt}${id==='rental'||id==='deposit'?(opt.includes('만')?'':'만원'):''}</span></label>`; }).join('')}</div><div class="p-3 border-t bg-slate-50/30 text-center"><button onclick="closeAllPopups()" class="w-full py-2.5 bg-white border border-slate-200 text-slate-800 font-black text-[11px] uppercase tracking-widest apply-btn-shadow">필터 적용</button></div>`;
             overlay.appendChild(popup);
         }
-
-        // 컬럼 필터 팝업
         if (state.activeFilterColumn) {
-            const dataKey = state.activeFilterColumn;
-            const label = Object.keys(baseColumns).find(k => baseColumns[k] === dataKey);
-            const counts = rawData.reduce((acc, item) => { const v = String(item[dataKey] || "미정"); acc[v] = (acc[v] || 0) + 1; return acc; }, {});
-            const sortedOptions = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-            const thElement = document.querySelector(`div[onclick*="toggleColumnFilter('${dataKey}')"]`).closest('th');
-            const thRect = thElement.getBoundingClientRect();
-
-            const popup = document.createElement('div');
-            popup.className = `absolute bg-white border border-slate-200 natural-shadow z-[100] w-64 rounded-none overflow-hidden flex flex-col`;
-            popup.style.top = `${thRect.bottom}px`;
-            popup.style.left = `${Math.min(thRect.left, window.innerWidth - 270)}px`;
-
-            popup.onclick = (e) => e.stopPropagation();
-
-            popup.innerHTML = `
-                <div class="p-3 border-b bg-slate-50 flex justify-between items-center">
-                    <span class="text-[11px] font-black text-slate-500 uppercase tracking-tighter">${label} 필터</span>
-                    <div class="flex items-center gap-2">
-                        <button onclick="resetColumnFilter('${dataKey}')" class="text-[10px] text-slate-400 font-black hover:text-blue-600 transition-colors">초기화</button>
-                        <button onclick="closeAllPopups()" class="text-slate-400 hover:text-slate-600 transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button>
-                    </div>
-                </div>
-                <div class="max-h-64 overflow-y-auto p-1 bg-white">
-                    ${sortedOptions.map(([value, count]) => {
-                        const isSelected = (state.columnFilters[dataKey] || []).includes(value);
-                        return `
-                            <label class="flex items-center gap-2.5 p-2.5 hover:bg-slate-50 cursor-pointer group transition-colors">
-                                <input type="checkbox" onchange="updateColumnFilter('${dataKey}', '${value}')" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 accent-slate-800 rounded-none">
-                                <span class="truncate flex-1 font-bold ${isSelected ? 'text-slate-900' : 'text-slate-500'}">${value}</span>
-                                <span class="text-slate-400 text-[10px] font-medium ml-auto">${count}</span>
-                            </label>
-                        `;
-                    }).join('')}
-                </div>
-                <div class="p-3 border-t bg-slate-50/30">
-                    <button onclick="closeAllPopups()" class="w-full py-2.5 bg-white border border-slate-200 text-slate-800 font-black text-[11px] apply-btn-shadow uppercase tracking-widest">필터 적용</button>
-                </div>
-            `;
+            const dataKey = state.activeFilterColumn; const label = Object.keys(baseColumns).find(k => baseColumns[k] === dataKey); const counts = rawData.reduce((acc, item) => { const v = String(item[dataKey] || "미정"); acc[v] = (acc[v] || 0) + 1; return acc; }, {});
+            const sortedOptions = Object.entries(counts).sort((a, b) => b[1] - a[1]); const thElement = document.querySelector(`div[onclick*="toggleColumnFilter('${dataKey}')"]`).closest('th'); const thRect = thElement.getBoundingClientRect();
+            const popup = document.createElement('div'); popup.className = `absolute bg-white border border-slate-200 natural-shadow z-[100] w-64 rounded-none overflow-hidden flex flex-col`; popup.style.top = `${thRect.bottom}px`; popup.style.left = `${Math.min(thRect.left, window.innerWidth - 270)}px`; popup.onclick = (e) => e.stopPropagation();
+            popup.innerHTML = `<div class="p-3 border-b bg-slate-50 flex justify-between items-center"><span class="text-[11px] font-black text-slate-500 uppercase tracking-tighter">${label} 필터</span><div class="flex items-center gap-2"><button onclick="resetColumnFilter('${dataKey}')" class="text-[10px] text-slate-400 font-black hover:text-blue-600 transition-colors">초기화</button><button onclick="closeAllPopups()" class="text-slate-400 hover:text-slate-600 transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button></div></div><div class="max-h-64 overflow-y-auto p-1 bg-white text-center">${sortedOptions.map(([value, count]) => { const isSelected = (state.columnFilters[dataKey] || []).includes(value); return `<label class="flex items-center gap-2.5 p-2.5 hover:bg-slate-50 cursor-pointer group transition-colors"><input type="checkbox" onchange="updateColumnFilter('${dataKey}', '${value}')" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 accent-slate-800 rounded-none"><span class="truncate flex-1 font-bold ${isSelected ? 'text-slate-900' : 'text-slate-500'} text-left">${value}</span><span class="text-slate-400 text-[10px] font-medium ml-auto">${count}</span></label>`; }).join('')}</div><div class="p-3 border-t bg-slate-50/30 text-center"><button onclick="closeAllPopups()" class="w-full py-2.5 bg-white border border-slate-200 text-slate-800 font-black text-[11px] apply-btn-shadow uppercase tracking-widest text-center">필터 적용</button></div>`;
             overlay.appendChild(popup);
         }
     }
 
-    // --- [EVENT HANDLERS] ---
-    window.handleCarClick = (no, event) => {
-        if (event) event.stopPropagation();
-        
-        const drawer = document.getElementById('detail-drawer');
-        drawer.classList.remove('animate-drawer-reset');
-        drawer.classList.add('translate-x-full');
-        
-        if (state.selectedCar?.차량_번호 === no) {
-            state.selectedCar = null;
-        } else {
-            state.selectedCar = rawData.find(c => c.차량_번호 === no);
-        }
-        render();
-    };
+    window.handleCarClick = (no, event) => { if (event) event.stopPropagation(); const drawer = document.getElementById('detail-drawer'); drawer.classList.remove('animate-drawer-reset'); drawer.classList.add('translate-x-full'); if (state.selectedCar?.차량_번호 === no) { state.selectedCar = null; } else { state.selectedCar = rawData.find(c => c.차량_번호 === no); } render(); };
     window.closeDetail = () => { state.selectedCar = null; render(); };
+    window.closeAllPopups = () => { state.activeSidebarPopup = null; state.activeFilterColumn = null; state.selectedCar = null; render(); };
+    window.toggleSidebarPopup = (id) => { if (state.activeSidebarPopup === id) state.activeSidebarPopup = null; else { state.activeFilterColumn = null; state.activeSidebarPopup = id; } render(); };
+    window.toggleColumnFilter = (key) => { if (state.activeFilterColumn === key) state.activeFilterColumn = null; else { state.activeSidebarPopup = null; state.activeFilterColumn = key; } render(); };
+    window.resetSidebarFilter = (key) => { if (key === 'period') state.selectedPeriods = ['36M', '48M', '60M']; else state.sidebarFilters[key] = []; render(); };
+    window.resetColumnFilter = (key) => { state.columnFilters[key] = []; render(); };
+    window.toggleSidebarFilter = (key, val) => { if (key === 'period') { const order = ['6M', '12M', '24M', '36M', '48M', '60M']; let next = state.selectedPeriods.includes(val) ? (state.selectedPeriods.length > 1 ? state.selectedPeriods.filter(x => x !== val) : state.selectedPeriods) : [...state.selectedPeriods, val]; state.selectedPeriods = next.sort((a, b) => order.indexOf(a) - order.indexOf(b)); } else { const curr = state.sidebarFilters[key]; state.sidebarFilters[key] = curr.includes(val) ? curr.filter(x => x !== val) : [...curr, val]; } render(); };
+    window.updateColumnFilter = (key, val) => { const curr = state.columnFilters[key] || []; state.columnFilters[key] = curr.includes(val) ? curr.filter(x => x !== val) : [...curr, val]; render(); };
+    window.handleSort = (key) => { if (state.sortConfig.key === key) { state.sortConfig.direction = (state.sortConfig.direction === 'desc') ? 'asc' : 'desc'; } else { state.sortConfig = { key, direction: 'desc' }; } render(); };
+    window.updateManagerInfo = () => { state.managerInfo.company = document.getElementById('mgr-co').value; state.managerInfo.nameTitle = document.getElementById('mgr-nt').value; state.managerInfo.phone = document.getElementById('mgr-ph').value; state.managerInfo.includeAccount = document.getElementById('mgr-acc').checked; localStorage.setItem('erp_manager_company', state.managerInfo.company); localStorage.setItem('erp_manager_nameTitle', state.managerInfo.nameTitle); localStorage.setItem('erp_manager_phone', state.managerInfo.phone); localStorage.setItem('erp_manager_includeAcc', String(state.managerInfo.includeAccount)); renderDetail(); };
     
-    window.closeAllPopups = () => {
-        state.activeSidebarPopup = null;
-        state.activeFilterColumn = null;
-        state.selectedCar = null;
-        render();
-    };
-
-    window.toggleSidebarPopup = (id) => { 
-        if (state.activeSidebarPopup === id) state.activeSidebarPopup = null;
-        else {
-            state.activeFilterColumn = null; 
-            state.activeSidebarPopup = id; 
-        }
-        render(); 
-    };
-
-    window.toggleColumnFilter = (key) => { 
-        if (state.activeFilterColumn === key) state.activeFilterColumn = null;
-        else {
-            state.activeSidebarPopup = null; 
-            state.activeFilterColumn = key; 
-        }
-        render(); 
-    };
-
-    window.resetSidebarFilter = (key) => {
-        if (key === 'period') state.selectedPeriods = ['36M', '48M', '60M'];
-        else state.sidebarFilters[key] = [];
-        render();
-    };
-
-    window.resetColumnFilter = (key) => {
-        state.columnFilters[key] = [];
-        render();
-    };
-    
-    window.toggleSidebarFilter = (key, val) => {
-        if (key === 'period') {
-            const order = ['6M', '12M', '24M', '36M', '48M', '60M'];
-            let next = state.selectedPeriods.includes(val) ? (state.selectedPeriods.length > 1 ? state.selectedPeriods.filter(x => x !== val) : state.selectedPeriods) : [...state.selectedPeriods, val];
-            state.selectedPeriods = next.sort((a, b) => order.indexOf(a) - order.indexOf(b));
-        } else {
-            const curr = state.sidebarFilters[key];
-            state.sidebarFilters[key] = curr.includes(val) ? curr.filter(x => x !== val) : [...curr, val];
-        }
-        render();
-    };
-
-    window.updateColumnFilter = (key, val) => {
-        const curr = state.columnFilters[key] || [];
-        state.columnFilters[key] = curr.includes(val) ? curr.filter(x => x !== val) : [...curr, val];
-        render();
-    };
-
-    window.handleSort = (key) => {
-        if (state.sortConfig.key === key) {
-            state.sortConfig.direction = (state.sortConfig.direction === 'desc') ? 'asc' : 'desc';
-        } else {
-            state.sortConfig = { key, direction: 'desc' };
-        }
-        render();
-    };
-
-    window.updateManagerInfo = () => {
-        state.managerInfo.company = document.getElementById('mgr-co').value;
-        state.managerInfo.nameTitle = document.getElementById('mgr-nt').value;
-        state.managerInfo.phone = document.getElementById('mgr-ph').value;
-        state.managerInfo.includeAccount = document.getElementById('mgr-acc').checked;
-        localStorage.setItem('erp_manager_company', state.managerInfo.company);
-        localStorage.setItem('erp_manager_nameTitle', state.managerInfo.nameTitle);
-        localStorage.setItem('erp_manager_phone', state.managerInfo.phone);
-        localStorage.setItem('erp_manager_includeAcc', String(state.managerInfo.includeAccount));
-        renderDetail();
-    };
-
-    // --- [COPY LOGIC: 수정된 UI 로직에 맞게 비고 괄호 제거 및 보험 긴급출동 변수 기반 반영] ---
     window.handleCopySummary = () => {
-        const c = state.selectedCar;
-        if (!c) return;
-        
+        const c = state.selectedCar; if (!c) return;
+        const isEV = String(c.차량_연료).includes('전기');
+        const evCapacity = getBatteryCapacity(c);
         let text = `[상품 상세 정보]\n\n`;
         text += `1. 차량 상세 제원\n`;
         text += `■ 차량번호: ${c.차량_번호} (${c.차량_구분}/${c.차량_상태})\n`;
         text += `■ 모델명: ${c.차량_제조사} ${c.차량_모델명} ${c.차량_세부모델}\n`;
         text += `■ 세부트림: ${c.차량_세부트림}\n`;
         text += `■ 선택옵션: ${c.차량_선택옵션 || '기본 사양'}\n`;
-        text += `■ 주요제원: ${c.차량_연료 || '-'} / ${c.차량_배기량 ? formatPrice(c.차량_배기량) + 'cc' : '-'} / ${formatPrice(c.차량_현재주행거리)}km\n`;
+        text += `■ 주요제원: ${c.차량_연료 || '-'} / ${isEV ? evCapacity : (c.차량_배기량 ? formatPrice(c.차량_배기량) + 'cc' : '-')} / ${formatPrice(c.차량_현재주행거리)}km\n`;
         text += `■ 색상(내/외): ${c.차량_내부색상} / ${c.차량_외부색상}\n`;
-        text += `■ 차량비고: ${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '없음'}\n`;
-        text += `■ 실물사진확인: ${c.차량_사진링크 || '링크 정보 없음'}\n\n`;
-
-        text += `2. 대여료 및 보증금 안내 (부가세 포함)\n`;
-        ['6M', '12M', '24M', '36M', '48M', '60M'].forEach(m => {
-            const fee = c[`금액_대여료_${m}`];
-            const dep = c[`금액_보증금_${m}`];
-            if (fee && fee !== '-' && fee !== '0' && fee !== '0원') {
-                text += `■ ${formatPeriod(m)}: 월 대여료 ${fee} / 보증금 ${dep}\n`;
-            }
-        });
-        text += `\n`;
-
-        text += `3. 보험 보상 상세\n`;
-        text += `■ 대인배상: ${c.보험_대인한도 || '무한'} (면책금: ${c.보험_대인면책 || '0원'})\n`;
-        text += `■ 대물배상: ${c.보험_대물한도 || '1억원'} (면책금: ${c.보험_대물면책 || '10만'})\n`;
-        text += `■ 자기신체(자손): ${c.보험_자손한도 || '3천만'} (면책금: ${c.보험_자손면책 || '없음'})\n`;
-        text += `■ 무보험차 상해: ${c.보험_무보험한도 || '2억원'} (면책금: ${c.보험_무보험면책 || '없음'})\n`;
-        text += `■ 자기차량(자차): ${c.보험_자차한도 || '차량가액 한도'} (면책금: 수리비 ${c.보험_자차수리비율 || '20%'}, ${c.보험_자차최소 || '20만'}~${c.보험_자차최대 || '50만'})\n`;
+        text += `■ 차량비고: ${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '입력된 내용이 없습니다.'}\n`;
+        text += `■ 차량 실물 사진: ${c.차량_사진링크 || '링크 정보 없음'}\n\n`;
+        text += `2. 대여료 및 보증금 안내 (부가세 포함)\n`; 
+        ['6M', '12M', '24M', '36M', '48M', '60M'].forEach(m => { const fee = c[`금액_대여료_${m}`]; const dep = c[`금액_보증금_${m}`]; if (fee && fee !== '-' && fee !== '0' && fee !== '0원') { text += `■ ${formatPeriod(m)}: 월 대여료 ${fee}원 / 보증금 ${dep}원\n`; } });
+        text += `\n3. 보험 보상 상세\n`;
+        text += `■ 대인배상: ${c.보험_대인한도 || '무한'} (면책금: ${formatDeductible(c.보험_대인면책)})\n`;
+        text += `■ 대물배상: ${c.보험_대물한도 || '1억원'} (면책금: ${formatDeductible(c.보험_대물면책)})\n`;
+        text += `■ 자기신체(자손): ${c.보험_자손한도 || '3천만'} (면책금: ${formatDeductible(c.보험_자손면책)})\n`;
+        text += `■ 무보험차 상해: ${c.보험_무보험한도 || '2억원'} (면책금: ${formatDeductible(c.보험_무보험면책)})\n`;
+        text += `■ 자기차량(자차): ${c.보험_자차한도 || '차량가액 한도'} (면책금: 수리비의 ${formatPercent(c.보험_자차수리비율)}, 최소 ${formatDeductible(c.보험_자차면책최소)} ~ 최대 ${formatDeductible(c.보험_자차면책최대)})\n`;
         text += `■ 긴급출동: ${c.보험_긴급출동 || '연 5회'}\n\n`;
-
         text += `4. 계약 및 추가 비용 조건\n`;
         text += `■ 기본연령: ${c.계약_기본운전연령 || '만 26세 이상'}\n`;
         text += `■ 약정거리: ${c.계약_약정주행거리 || '2만km'}\n`;
-        
-        const fee21 = parseNum(c.계약_21세추가금);
-        const fee23 = parseNum(c.계약_23세추가금);
-        text += `■ 연령 하향(+): 만 21세(${fee21 > 0 ? formatPrice(fee21) + '원' : '운영안함'}), 만 23세(${fee23 > 0 ? formatPrice(fee23) + '원' : '운영안함'})\n`;
-        text += `■ 거리 추가(+): 1만km당 ${formatPrice(c.계약_주행거리추가금)}원/월\n`;
-        if (c.계약_비고) text += `■ 계약특이사항: ${c.계약_비고}\n`;
-        text += `\n`;
-
-        text += `5. 담당자 정보\n`;
+        // [수정] 텍스트 복사 시 연령 하향 및 거리 추가 양식 통일 반영
+        text += `■ 만 21세 연령 하향: ${formatContractOption(c.계약_21세추가금)}\n`;
+        text += `■ 만 23세 연령 하향: ${formatContractOption(c.계약_23세추가금)}\n`;
+        text += `■ 연간 1만km 거리 추가: ${formatContractOption(c.계약_1만Km추가금)}\n`;
+        text += `■ 계약특이사항: ${c.계약_비고 || '입력된 내용이 없습니다.'}\n`;
+        text += `\n5. 담당자 정보\n`;
         text += `■ 소속/담당: ${state.managerInfo.company || '-'} ${state.managerInfo.nameTitle || '-'}\n`;
         text += `■ 연락처: ${state.managerInfo.phone || '-'}\n`;
-        if (state.managerInfo.includeAccount) {
-            text += `■ 입금계좌: ${c.계약_입금계좌번호 || '계좌 정보 미등록'} (우리은행/프레패스)\n`;
-        }
-        text += `\n* 본 정보는 내부 전산 데이터로 실시간 재고 상황에 따라 변동될 수 있습니다.`;
-
-        const ta = document.createElement("textarea");
-        ta.value = text; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); } catch (err) {}
-        document.body.removeChild(ta);
-        
-        const btn = document.getElementById('btn-copy-summary');
-        const originalContent = btn.innerHTML;
-        btn.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> 텍스트 복사됨`;
-        btn.classList.replace('bg-slate-800', 'bg-green-600');
-        lucide.createIcons();
-        setTimeout(() => { btn.innerHTML = originalContent; btn.classList.replace('bg-green-600', 'bg-slate-800'); lucide.createIcons(); }, 2000);
+        if (state.managerInfo.includeAccount) { text += `■ 입금계좌: ${c.계약_입금계좌번호 || '계좌 정보 미등록'} (우리은행/프레패스)\n`; }
+        text += `\n* 본 정보는 내부 전산 데이터로 실시간 재고 상황에 따라 변동될 수 있습니다.\n`;
+        text += `* 고객용 상세 링크: ${window.location.origin}${window.location.pathname}?car=${c.차량_번호}`;
+        const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(ta);
+        const btn = document.getElementById('btn-copy-summary'); const originalContent = btn.innerHTML; btn.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> 텍스트 복사됨`; btn.classList.replace('bg-slate-800', 'bg-green-600'); lucide.createIcons(); setTimeout(() => { btn.innerHTML = originalContent; btn.classList.replace('bg-green-600', 'bg-slate-800'); lucide.createIcons(); }, 2000);
     };
 
-    window.handleCopyLink = () => {
-        const shareUrl = `${window.location.origin}${window.location.pathname}?car=${state.selectedCar.차량_번호}`;
-        const ta = document.createElement("textarea");
-        ta.value = shareUrl; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); } catch (err) {}
-        document.body.removeChild(ta);
-        
-        const btn = document.getElementById('btn-copy-link');
-        const originalContent = btn.innerHTML;
-        btn.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> 주소 복사됨`;
-        btn.classList.add('bg-emerald-600', 'text-white');
-        lucide.createIcons();
-        setTimeout(() => { btn.innerHTML = originalContent; btn.classList.remove('bg-emerald-600', 'text-white'); lucide.createIcons(); }, 2000);
+    window.handleCopyLink = () => { 
+        const shareUrl = `${window.location.origin}${window.location.pathname}?car=${state.selectedCar.차량_번호}`; 
+        const ta = document.createElement("textarea"); ta.value = shareUrl; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(ta); 
+        const btn = document.getElementById('btn-copy-link'); const originalContent = btn.innerHTML; btn.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> 주소 복사됨`; btn.classList.add('bg-emerald-600', 'text-white'); lucide.createIcons(); setTimeout(() => { btn.innerHTML = originalContent; btn.classList.remove('bg-emerald-600', 'text-white'); lucide.createIcons(); }, 2000); 
     };
 
-    window.downloadExcel = () => {
-        const tableHeaders = ["상태", "구분", "차량번호", "제조사", "모델", "세부모델", "세부트림(선택옵션)", "외부색상", "내부색상", "주행거리", "대여료", "보증금"];
-        const csvContent = "\uFEFF" + tableHeaders.join(",");
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob); link.setAttribute("download", "매물리스트_엑셀.csv"); link.click();
-    };
-
+    window.downloadExcel = () => { const tableHeaders = ["상태", "구분", "차량번호", "제조사", "모델", "세부모델", "세부트림(선택옵션)", "외부색상", "내부색상", "주행거리", "대여료", "보증금"]; const csvContent = "\uFEFF" + tableHeaders.join(","); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", "매물리스트_엑셀.csv"); link.click(); };
     document.getElementById('searchInput').oninput = (e) => { state.searchTerm = e.target.value; render(); };
-
-    window.onload = () => fetchData(false); // 초기 로드 시에는 아이콘이 돌아가지 않음
+    window.onload = () => { lucide.createIcons(); }; 
 </script>
 </body>
 </html>
