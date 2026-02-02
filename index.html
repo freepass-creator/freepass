@@ -85,6 +85,9 @@
             </div>
 
             <div class="ml-auto flex items-center gap-4" onclick="event.stopPropagation()">
+                <!-- [수정] 최신화 완료 메시지 레이어: 오해 소지가 있는 단어 제거 -->
+                <div id="toast-msg" class="opacity-0 transition-all duration-500 bg-blue-600 text-white px-2 py-1 text-[9px] font-black rounded-sm shadow-sm pointer-events-none">데이터 연동이 완료되었습니다</div>
+                
                 <div class="flex items-center gap-1.5">
                     <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
                     <span class="text-[11px] text-slate-400 font-black uppercase tracking-tighter">데이터 서버 연동 중:</span>
@@ -93,7 +96,7 @@
                 </div>
                 <div class="h-4 border-l border-slate-200"></div>
                 <button onclick="fetchData(true)" class="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 font-bold text-[11px] hover:bg-slate-50 transition-all text-slate-700 rounded-none btn-pressable">
-                    <i data-lucide="rotate-cw" id="refresh-icon" class="w-3 h-3"></i> 최신화
+                    <i data-lucide="rotate-cw" id="refresh-icon" class="w-3 h-3"></i> 데이터 갱신
                 </button>
             </div>
         </header>
@@ -173,11 +176,17 @@
         return `<span class="inline-flex items-center justify-center px-1.5 py-0.5 border text-[10px] font-black leading-none whitespace-nowrap rounded-none ${colorClass}">${text}</span>`;
     }
 
-    // --- [DATA FETCHING: 최신화 아이콘 스핀 제어 추가] ---
+    // --- [DATA FETCHING: 최신화 아이콘 스핀 제어 및 알림 멘트 추가] ---
     async function fetchData(isManual = false) {
         const icon = document.getElementById('refresh-icon');
-        // 수동 클릭(isManual=true)인 경우에만 스핀 동작
-        if (isManual) icon.classList.add('animate-spin');
+        const toast = document.getElementById('toast-msg');
+        
+        // 수동 클릭인 경우에만 스핀 동작 시작
+        if (isManual) {
+            icon.classList.add('animate-spin');
+            toast.classList.replace('opacity-100', 'opacity-0');
+        }
+
         try {
             const res = await fetch(`${CSV_URL}&cachebust=${Date.now()}`);
             const text = await res.text();
@@ -187,11 +196,24 @@
                 const values = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v ? v.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : "");
                 return headers.reduce((obj, header, i) => { obj[header] = values[i] || ""; return obj; }, {});
             });
+            
             render();
-        } catch (e) { console.error("Data fetch error", e); }
-        if (isManual) {
-            // 애니메이션 체감을 위해 아주 짧은 지연 후 제거
-            setTimeout(() => icon.classList.remove('animate-spin'), 600);
+
+            // [수정] 데이터 로드 및 렌더링이 성공적으로 완료되었을 때만 멘트 출력
+            if (isManual) {
+                toast.classList.remove('opacity-0');
+                toast.classList.add('opacity-100');
+                setTimeout(() => {
+                    toast.classList.replace('opacity-100', 'opacity-0');
+                }, 2000);
+            }
+        } catch (e) { 
+            console.error("Data fetch error", e); 
+        } finally {
+            // [수정] 로직이 완전히 종료되면 스핀 즉시 정지
+            if (isManual) {
+                icon.classList.remove('animate-spin');
+            }
         }
     }
 
@@ -386,7 +408,7 @@
         `).join('');
     }
 
-    // [수정] renderDetail: 닫힐 때는 즉시 vanish(순식간에), 열릴 때는 서랍형 슬라이드 적용
+    // [수정] renderDetail: 1번 비고 배지/대괄호 제거 및 3번 보험 구글시트 변수 기반 반영
     function renderDetail() {
         const drawer = document.getElementById('detail-drawer');
         
@@ -443,8 +465,9 @@
                             <div class="col-span-2 flex flex-col mt-1 p-2.5 bg-slate-50 border border-slate-100">
                                 <span class="text-slate-400 font-black text-[9px] uppercase mb-1.5">차량 세부 상태 및 비고</span>
                                 <div class="flex items-start gap-2">
-                                    ${getStatusBadgeHtml(c.차량_세부상태, "세부상태")}
-                                    <span class="font-medium text-slate-700 leading-relaxed">${c.차량_비고 || '입력된 특이사항이 없습니다.'}</span>
+                                    <span class="font-medium text-slate-700 leading-relaxed">
+                                        ${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '입력된 특이사항이 없습니다.'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -478,16 +501,14 @@
                             <tr class="divide-x divide-slate-200 border-b border-slate-200"><th class="py-2 px-2 text-left">보상 항목</th><th class="py-2 px-2">보상 한도</th><th class="py-2 px-2 text-right pr-4">면책금</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-800 font-bold uppercase tracking-tighter">
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">대인 배상</td><td class="p-2 font-black">${c.보험_대인 || '무한'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_대인면책금 || '0원'}</td></tr>
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">대물 배상</td><td class="p-2 font-black">${c.보험_대물 || '1억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_대물면책금 || '10만'}</td></tr>
-                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">자기신체(자손)</td><td class="p-2 font-black">${c.보험_자손 || '3천만'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_자손면책금 || '없음'}</td></tr>
-                            <tr class="divide-x bg-blue-50/20"><td class="p-2 text-left text-slate-500 font-black">자기차량(자차)</td><td class="p-2 font-black">차량가액 한도</td><td class="p-2 text-right text-rose-700 pr-4">수리비 20% (${c.보험_최소면책금 || '20만'}~${c.보험_최대면책금 || '50만'})</td></tr>
+                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">대인 배상</td><td class="p-2 font-black">${c.보험_대인한도 || '무한'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_대인면책 || '0원'}</td></tr>
+                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">대물 배상</td><td class="p-2 font-black">${c.보험_대물한도 || '1억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_대물면책 || '10만'}</td></tr>
+                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">자기신체(자손)</td><td class="p-2 font-black">${c.보험_자손한도 || '3천만'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_자손면책 || '없음'}</td></tr>
+                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">무보험차 상해</td><td class="p-2 font-black">${c.보험_무보험한도 || '2억원'}</td><td class="p-2 text-right text-blue-800 pr-4">${c.보험_무보험면책 || '없음'}</td></tr>
+                            <tr class="divide-x bg-blue-50/20"><td class="p-2 text-left text-slate-500 font-black">자기차량(자차)</td><td class="p-2 font-black">${c.보험_자차한도 || '차량가액 한도'}</td><td class="p-2 text-right text-rose-700 pr-4">수리비 ${c.보험_자차수리비율 || '20%'} (${c.보험_자차최소 || '20만'}~${c.보험_자차최대 || '50만'})</td></tr>
+                            <tr class="divide-x"><td class="p-2 text-left text-slate-500 font-black">긴급출동</td><td class="p-2 font-black">${c.보험_긴급출동 || '연 5회'}</td><td class="p-2 text-right text-blue-800 pr-4">-</td></tr>
                         </tbody>
                     </table>
-                    <div class="p-2.5 bg-rose-50 border-t border-rose-100 flex items-start gap-2">
-                        <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-rose-600 mt-0.5 flex-shrink-0"></i>
-                        <p class="text-[10px] text-rose-700 font-black leading-tight uppercase">1년 미만 운전자 면책금 30만원 추가 할증 적용</p>
-                    </div>
                 </section>
 
                 <!-- 4. 계약 정책 및 연령/거리 옵션 -->
@@ -497,7 +518,6 @@
                         <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">기본연령</span><span class="font-black">${c.계약_기본운전연령 || '만 26세'}</span></div>
                         <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">약정거리</span><span class="font-black">${c.계약_약정주행거리 || '2만km'}</span></div>
                     </div>
-                    <div class="p-2.5 flex justify-between items-center border-b bg-amber-50/50"><span class="text-amber-700 font-black text-[10px] uppercase">중도해지 수수료율</span><span class="font-black text-amber-800">잔여대여료의 30%</span></div>
                     <div class="divide-y divide-slate-100 text-slate-800 bg-white">
                         <div class="flex justify-between p-2.5 hover:bg-slate-50 transition-colors">
                             <span class="text-slate-500 font-bold uppercase">만 21세 연령 하향</span>
@@ -656,11 +676,9 @@
     }
 
     // --- [EVENT HANDLERS] ---
-    // [수정] handleCarClick: row 클릭 시 이벤트 전파 중단 추가하여 오버레이 닫기 로직과 충돌 방지
     window.handleCarClick = (no, event) => {
         if (event) event.stopPropagation();
         
-        // 다른 상품 클릭 시 기존 슬라이드 효과를 리셋하기 위해 즉시 클래스 조작
         const drawer = document.getElementById('detail-drawer');
         drawer.classList.remove('animate-drawer-reset');
         drawer.classList.add('translate-x-full');
@@ -674,7 +692,6 @@
     };
     window.closeDetail = () => { state.selectedCar = null; render(); };
     
-    // [수정] closeAllPopups: 오버레이 클릭 시 모든 팝업 및 상세 페이지를 닫음
     window.closeAllPopups = () => {
         state.activeSidebarPopup = null;
         state.activeFilterColumn = null;
@@ -750,7 +767,7 @@
         renderDetail();
     };
 
-    // --- [COPY LOGIC: 원본 100% 보존] ---
+    // --- [COPY LOGIC: 수정된 UI 로직에 맞게 비고 괄호 제거 및 보험 긴급출동 변수 기반 반영] ---
     window.handleCopySummary = () => {
         const c = state.selectedCar;
         if (!c) return;
@@ -763,10 +780,10 @@
         text += `■ 선택옵션: ${c.차량_선택옵션 || '기본 사양'}\n`;
         text += `■ 주요제원: ${c.차량_연료 || '-'} / ${c.차량_배기량 ? formatPrice(c.차량_배기량) + 'cc' : '-'} / ${formatPrice(c.차량_현재주행거리)}km\n`;
         text += `■ 색상(내/외): ${c.차량_내부색상} / ${c.차량_외부색상}\n`;
+        text += `■ 차량비고: ${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '없음'}\n`;
         text += `■ 실물사진확인: ${c.차량_사진링크 || '링크 정보 없음'}\n\n`;
 
         text += `2. 대여료 및 보증금 안내 (부가세 포함)\n`;
-        text += `■ 월 렌탈료 안내 (계약기간별 상이)\n`;
         ['6M', '12M', '24M', '36M', '48M', '60M'].forEach(m => {
             const fee = c[`금액_대여료_${m}`];
             const dep = c[`금액_보증금_${m}`];
@@ -777,23 +794,23 @@
         text += `\n`;
 
         text += `3. 보험 보상 상세\n`;
-        text += `■ 대인배상: ${c.보험_대인 || '무한'} (면책금: ${c.보험_대인면책금 || '0원'})\n`;
-        text += `■ 대물배상: ${c.보험_대물 || '1억원'} (면책금: ${c.보험_대물면책금 || '10만'})\n`;
-        text += `■ 자기신체(자손): ${c.보험_자손 || '3천만'} (면책금: ${c.보험_자손면책금 || '없음'})\n`;
-        text += `■ 무보험차 상해: ${c.보험_무보험 || '2억원'} (면책금: ${c.보험_무보험면책금 || '없음'})\n`;
-        text += `■ 자기차량(자차): 차량가액 한도 (면책금: 수리비 20%, ${c.보험_최소면책금 || '20만'}~${c.보험_최대면책금 || '50만'})\n`;
-        text += `■ 면책금 할증: 1년 미만 운전자 면책금 30만원 추가 할증 적용\n`;
-        text += `■ 긴급출동: 연 5회 제공\n\n`;
+        text += `■ 대인배상: ${c.보험_대인한도 || '무한'} (면책금: ${c.보험_대인면책 || '0원'})\n`;
+        text += `■ 대물배상: ${c.보험_대물한도 || '1억원'} (면책금: ${c.보험_대물면책 || '10만'})\n`;
+        text += `■ 자기신체(자손): ${c.보험_자손한도 || '3천만'} (면책금: ${c.보험_자손면책 || '없음'})\n`;
+        text += `■ 무보험차 상해: ${c.보험_무보험한도 || '2억원'} (면책금: ${c.보험_무보험면책 || '없음'})\n`;
+        text += `■ 자기차량(자차): ${c.보험_자차한도 || '차량가액 한도'} (면책금: 수리비 ${c.보험_자차수리비율 || '20%'}, ${c.보험_자차최소 || '20만'}~${c.보험_자차최대 || '50만'})\n`;
+        text += `■ 긴급출동: ${c.보험_긴급출동 || '연 5회'}\n\n`;
 
         text += `4. 계약 및 추가 비용 조건\n`;
         text += `■ 기본연령: ${c.계약_기본운전연령 || '만 26세 이상'}\n`;
         text += `■ 약정거리: ${c.계약_약정주행거리 || '2만km'}\n`;
-        text += `■ 해지위약: 중도해지 수수료율 30%\n`;
         
         const fee21 = parseNum(c.계약_21세추가금);
         const fee23 = parseNum(c.계약_23세추가금);
         text += `■ 연령 하향(+): 만 21세(${fee21 > 0 ? formatPrice(fee21) + '원' : '운영안함'}), 만 23세(${fee23 > 0 ? formatPrice(fee23) + '원' : '운영안함'})\n`;
-        text += `■ 거리 추가(+): 1만km당 ${formatPrice(c.계약_주행거리추가금)}원/월\n\n`;
+        text += `■ 거리 추가(+): 1만km당 ${formatPrice(c.계약_주행거리추가금)}원/월\n`;
+        if (c.계약_비고) text += `■ 계약특이사항: ${c.계약_비고}\n`;
+        text += `\n`;
 
         text += `5. 담당자 정보\n`;
         text += `■ 소속/담당: ${state.managerInfo.company || '-'} ${state.managerInfo.nameTitle || '-'}\n`;
