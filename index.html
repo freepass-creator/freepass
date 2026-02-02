@@ -53,11 +53,16 @@
         .apply-btn-shadow:hover { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
         .apply-btn-shadow:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1); }
         
-        @keyframes drawerAppear { 0% { transform: translateX(100%); opacity: 0; } 100% { transform: translateX(0); opacity: 1; } }
-        .animate-drawer-reset { animation: drawerAppear 0.3s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
+        /* [수정] 상세 페이지 서랍형 슬라이드 애니메이션 (우->좌) */
+        @keyframes drawerAppear { 
+            0% { transform: translateX(100%); } 
+            100% { transform: translateX(0); } 
+        }
+        .animate-drawer-reset { animation: drawerAppear 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
     </style>
 </head>
-<body class="overflow-hidden select-none border-none">
+<!-- [수정] 마우스 오른쪽 버튼 차단 속성(oncontextmenu) 추가 -->
+<body class="overflow-hidden select-none border-none" oncontextmenu="return false">
 
 <div id="app" class="flex h-screen overflow-hidden text-[11px]">
     <!-- 좌측 필터바 -->
@@ -66,9 +71,10 @@
     </div>
 
     <!-- 메인 영역 -->
-    <div class="flex-1 flex flex-col min-w-0 relative">
-        <header class="h-[50px] bg-white border-b border-slate-200 flex items-center px-4 gap-4 flex-shrink-0 z-20 shadow-sm">
-            <div class="flex items-center gap-3 flex-1 max-w-2xl">
+    <!-- [수정] 메인 영역 클릭 시 상세페이지가 닫히도록 onclick 추가 (무관한 곳 클릭 감지) -->
+    <div class="flex-1 flex flex-col min-w-0 relative" onclick="closeDetail()">
+        <header class="h-[50px] bg-white border-b border-slate-200 flex items-center px-4 gap-4 flex-shrink-0 z-20 shadow-sm" onclick="event.stopPropagation(); closeDetail();">
+            <div class="flex items-center gap-3 flex-1 max-w-2xl" onclick="event.stopPropagation()">
                 <div class="relative flex-1 max-w-sm">
                     <i data-lucide="search" class="absolute left-2.5 top-2.5 text-slate-400 w-4 h-4"></i>
                     <input type="text" id="searchInput" placeholder="매물 통합 검색..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-none text-xs focus:outline-none focus:border-slate-400 bg-white">
@@ -78,7 +84,7 @@
                 </button>
             </div>
 
-            <div class="ml-auto flex items-center gap-4">
+            <div class="ml-auto flex items-center gap-4" onclick="event.stopPropagation()">
                 <div class="flex items-center gap-1.5">
                     <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
                     <span class="text-[11px] text-slate-400 font-black uppercase tracking-tighter">데이터 서버 연동 중:</span>
@@ -96,14 +102,15 @@
         <div class="flex-1 overflow-auto bg-white m-0 relative text-slate-800">
             <table class="w-full border-collapse text-left text-[11px] table-fixed">
                 <thead class="sticky top-0 bg-[#f8f9fb] border-b border-slate-300 z-40 font-bold text-slate-600 text-center uppercase tracking-tighter">
-                    <tr id="table-header" class="divide-x divide-slate-200"></tr>
+                    <tr id="table-header" class="divide-x divide-slate-200" onclick="event.stopPropagation()"></tr>
                 </thead>
                 <tbody id="table-body" class="divide-y divide-slate-100 text-center font-sans"></tbody>
             </table>
         </div>
 
         <!-- 상세 페이지 Drawer -->
-        <div id="detail-drawer" class="absolute right-0 top-0 h-full w-[440px] bg-white natural-shadow z-[100] flex flex-col border-l border-slate-200 transition-transform duration-300 translate-x-full"></div>
+        <!-- [수정] 클릭 전파 방지 유지 및 transition 제거하여 닫을 때 '즉시' 사라지게 함 -->
+        <div id="detail-drawer" onclick="event.stopPropagation()" class="absolute right-0 top-0 h-full w-[440px] bg-white natural-shadow z-[100] flex flex-col border-l border-slate-200 translate-x-full"></div>
     </div>
 </div>
 
@@ -314,6 +321,9 @@
             const isSorted = state.sortConfig.key === dataKey;
             const isActive = state.activeFilterColumn === dataKey;
             
+            // [수정] 필터 가능 여부 확인
+            const isFilterable = filterableColumns.includes(label);
+
             let columnWidth = (label === '상태' || label === '구분') ? "w-[72px]" : 
                              label === '차량번호' ? "w-[100px]" : 
                              label === '제조사' ? "w-[90px]" : 
@@ -325,9 +335,9 @@
 
             html += `
                 <th class="py-2 px-1 relative transition-colors border-b border-slate-200 ${isSorted || isActive ? 'bg-blue-50' : ''} ${columnWidth}">
-                    <div class="flex flex-row items-center justify-center gap-1 leading-tight h-full relative overflow-hidden">
+                    <div ${isFilterable ? `onclick="toggleColumnFilter('${dataKey}'); event.stopPropagation();"` : ""} class="flex flex-row items-center justify-center gap-1 leading-tight h-full relative overflow-hidden ${isFilterable ? 'cursor-pointer' : ''}">
                         <span class="${isFiltered || isSorted ? 'text-blue-700 font-black' : ''} truncate">${label}</span>
-                        ${filterableColumns.includes(label) ? `<button onclick="toggleColumnFilter('${dataKey}'); event.stopPropagation();" class="p-0.5 ${isFiltered || isActive ? 'text-blue-700' : 'text-slate-300'}"><i data-lucide="filter" class="w-2.5 h-2.5" ${isFiltered ? 'fill="currentColor"' : ''}></i></button>` : ''}
+                        ${isFilterable ? `<div class="p-0.5 ${isFiltered || isActive ? 'text-blue-700' : 'text-slate-300'}"><i data-lucide="filter" class="w-2.5 h-2.5" ${isFiltered ? 'fill="currentColor"' : ''}></i></div>` : ''}
                         ${sortableColumns.includes(label) ? `<button onclick="handleSort('${dataKey}')" class="p-0.5 ${isSorted ? 'text-blue-700' : 'text-slate-300'}"><i data-lucide="${isSorted ? (state.sortConfig.direction === 'asc' ? 'arrow-up' : 'arrow-down') : 'arrow-up-down'}" class="w-2.5 h-2.5"></i></button>` : ''}
                     </div>
                 </th>
@@ -352,7 +362,7 @@
 
     function renderTable(data) {
         document.getElementById('table-body').innerHTML = data.map(item => `
-            <tr onclick="handleCarClick('${item.차량_번호}')" class="hover:bg-slate-50 cursor-pointer divide-x divide-slate-50 h-[52px] transition-colors ${state.selectedCar?.차량_번호 === item.차량_번호 ? 'bg-blue-50 font-bold' : ''}">
+            <tr onclick="handleCarClick('${item.차량_번호}', event)" class="hover:bg-slate-50 cursor-pointer divide-x divide-slate-50 h-[52px] transition-colors ${state.selectedCar?.차량_번호 === item.차량_번호 ? 'bg-blue-50 font-bold' : ''}">
                 <td class="p-2 text-center">${getStatusBadgeHtml(item.차량_상태, "상태")}</td>
                 <td class="p-2 text-center">${getStatusBadgeHtml(item.차량_구분, "구분")}</td>
                 <td class="p-2 truncate font-bold text-slate-900">${item.차량_번호 || '-'}</td>
@@ -376,10 +386,23 @@
         `).join('');
     }
 
+    // [수정] renderDetail: 닫힐 때는 즉시 vanish(순식간에), 열릴 때는 서랍형 슬라이드 적용
     function renderDetail() {
         const drawer = document.getElementById('detail-drawer');
-        if (!state.selectedCar) { drawer.classList.add('translate-x-full'); return; }
+        
+        // 상세 데이터가 없으면 즉시 사라지게 처리
+        if (!state.selectedCar) { 
+            drawer.classList.add('translate-x-full'); 
+            drawer.classList.remove('animate-drawer-reset');
+            return; 
+        }
+        
         const c = state.selectedCar;
+        
+        // 새로운 상품 클릭 시 애니메이션 초기화를 위한 강제 리플로우
+        drawer.classList.remove('animate-drawer-reset');
+        void drawer.offsetWidth; 
+        
         drawer.classList.remove('translate-x-full');
         drawer.classList.add('animate-drawer-reset');
 
@@ -536,7 +559,8 @@
         const overlay = document.getElementById('popup-overlay');
         overlay.innerHTML = '';
         
-        // 팝업이 하나라도 열려 있으면 오버레이 활성화
+        // [수정] 상세 페이지 스크롤 허용을 위해 overlay 조건에서 state.selectedCar 제거
+        // 사이드바 팝업이나 컬럼 필터가 열렸을 때만 오버레이 활성화
         if (state.activeSidebarPopup || state.activeFilterColumn) {
             overlay.classList.remove('pointer-events-none');
             overlay.classList.add('pointer-events-auto');
@@ -593,7 +617,7 @@
             const label = Object.keys(baseColumns).find(k => baseColumns[k] === dataKey);
             const counts = rawData.reduce((acc, item) => { const v = String(item[dataKey] || "미정"); acc[v] = (acc[v] || 0) + 1; return acc; }, {});
             const sortedOptions = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-            const thElement = document.querySelector(`button[onclick*="toggleColumnFilter('${dataKey}')"]`).closest('th');
+            const thElement = document.querySelector(`div[onclick*="toggleColumnFilter('${dataKey}')"]`).closest('th');
             const thRect = thElement.getBoundingClientRect();
 
             const popup = document.createElement('div');
@@ -632,16 +656,29 @@
     }
 
     // --- [EVENT HANDLERS] ---
-    window.handleCarClick = (no) => {
-        if (state.selectedCar?.차량_번호 === no) state.selectedCar = null;
-        else state.selectedCar = rawData.find(c => c.차량_번호 === no);
+    // [수정] handleCarClick: row 클릭 시 이벤트 전파 중단 추가하여 오버레이 닫기 로직과 충돌 방지
+    window.handleCarClick = (no, event) => {
+        if (event) event.stopPropagation();
+        
+        // 다른 상품 클릭 시 기존 슬라이드 효과를 리셋하기 위해 즉시 클래스 조작
+        const drawer = document.getElementById('detail-drawer');
+        drawer.classList.remove('animate-drawer-reset');
+        drawer.classList.add('translate-x-full');
+        
+        if (state.selectedCar?.차량_번호 === no) {
+            state.selectedCar = null;
+        } else {
+            state.selectedCar = rawData.find(c => c.차량_번호 === no);
+        }
         render();
     };
     window.closeDetail = () => { state.selectedCar = null; render(); };
     
+    // [수정] closeAllPopups: 오버레이 클릭 시 모든 팝업 및 상세 페이지를 닫음
     window.closeAllPopups = () => {
         state.activeSidebarPopup = null;
         state.activeFilterColumn = null;
+        state.selectedCar = null;
         render();
     };
 
@@ -729,6 +766,7 @@
         text += `■ 실물사진확인: ${c.차량_사진링크 || '링크 정보 없음'}\n\n`;
 
         text += `2. 대여료 및 보증금 안내 (부가세 포함)\n`;
+        text += `■ 월 렌탈료 안내 (계약기간별 상이)\n`;
         ['6M', '12M', '24M', '36M', '48M', '60M'].forEach(m => {
             const fee = c[`금액_대여료_${m}`];
             const dep = c[`금액_보증금_${m}`];
