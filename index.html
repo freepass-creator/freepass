@@ -3,15 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>프레패스 모빌리티 ERP</title>
+    <title>장기렌터카 영업전용 ERP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
+        /* CSS 스타일 구역 상단에 추가 */
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
         /* [폰트 설정] 전체 Sans-serif 통일 */
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
-        * { font-family: 'Noto Sans KR', sans-serif; }
         
-        body { font-size: 11px; background-color: #f1f3f6; color: #0f172a; }
+        /* [정밀 수정] 폰트 스타일 개선 */
+        body { 
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 11px; 
+            line-height: 1.5; /* 줄 간격을 넓혀서 덜 답답하게 함 */
+            letter-spacing: -0.02em; /* 자간을 살짝 조여서 얍실한 느낌 가미 */
+            background-color: #f1f3f6; 
+            color: #1e293b; /* 너무 진한 검정보다 짙은 회색이 번짐이 덜함 */
+        }
+
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .sidebar-elevation { box-shadow: 4px 0 15px rgba(0, 0, 0, 0.08), 1px 0 3px rgba(0, 0, 0, 0.1); }
         
@@ -45,6 +60,27 @@
             background-color: #f8fafc;
         }
         
+        /* 테이블 헤더와 본문 폰트 두께 미세 조정 */
+        thead th { font-weight: 700; color: #475569; }
+        tbody td { font-weight: 500; }
+        
+        /* [정밀 수정] 제목줄의 답답함 해소 */
+        .font-black { 
+            font-weight: 700 !important; /* 900(Black)에서 700(Bold)으로 낮춤 */
+            letter-spacing: -0.03em;    /* 자간을 살짝 조여 글자가 날렵해 보이게 함 */
+        }
+
+        .font-bold {
+            font-weight: 600 !important; /* 700에서 600(SemiBold)으로 낮춤 */
+        }
+
+        /* 섹션 제목줄(Header) 디자인 미세 조정 */
+        .bg-slate-50.px-3.py-2.border-b {
+            padding-top: 10px;    /* 위아래 여백을 주어 숨통을 틔움 */
+            padding-bottom: 10px;
+            line-height: 1.2;
+        }
+
         .natural-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05); }
         .apply-btn-shadow { 
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -60,7 +96,28 @@
         }
         .animate-drawer-reset { animation: drawerAppear 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
 
-        #access-gate { transition: opacity 0.5s ease-out; }
+        /* 게이트 전용 애니메이션 및 스타일 */
+        #access-gate {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+        }
+        .gate-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            text-align: center;
+            letter-spacing: 0.5em;
+            font-size: 24px;
+        }
+        .gate-input:focus {
+            border-color: #3b82f6;
+            outline: none;
+            background: rgba(255, 255, 255, 0.1);
+        }
 
         /* 상세페이지 섹션 타격감 효과 */
         .tactile-section {
@@ -73,7 +130,47 @@
 </head>
 <body class="overflow-hidden select-none border-none" oncontextmenu="return false">
 
-<div id="app" class="flex h-screen overflow-hidden text-[11px] opacity-100 transition-opacity duration-700">
+<!-- 보안 접속 게이트 -->
+<div id="access-gate" class="fixed inset-0 flex flex-col items-center justify-center p-6 text-white text-center z-[9999] bg-[#0f172a]">
+    <div class="max-w-md w-full space-y-8 animate-drawer-reset">
+        <div>
+            <h1 class="text-3xl font-black tracking-widest mb-2">반갑습니다!</h1>
+            <p class="text-slate-400 font-bold uppercase tracking-tighter text-sm">장기렌터카 영업전용 ERP 시스템</p>
+        </div>
+
+        <div class="bg-white/5 p-6 rounded-none space-y-4 border border-white/10 text-left">
+            <p class="text-[11px] text-blue-400 font-black uppercase tracking-widest">사용자 정보 등록</p>
+            <div class="grid grid-cols-2 gap-2">
+                <input type="text" id="gate-co" placeholder="소속" class="p-3 bg-slate-800 border border-slate-700 text-xs text-white focus:border-blue-500 outline-none">
+                <input type="text" id="gate-nt" placeholder="성명/직책" class="p-3 bg-slate-800 border border-slate-700 text-xs text-white focus:border-blue-500 outline-none">
+                <input type="text" id="gate-ph" placeholder="연락처" class="p-3 bg-slate-800 border border-slate-700 text-xs text-white focus:border-blue-500 outline-none col-span-2">
+            </div>
+            <p class="text-[10px] text-slate-500 font-medium text-center w-full">※ 입력하신 정보는 담당자정보에 자동 반영됩니다.</p>
+        </div>
+
+        <div class="space-y-4">
+            <p class="text-sm font-bold tracking-tighter">보안 코드를 입력하세요 (4자리)</p>
+            <input type="password" id="security-code" maxlength="4" class="w-full p-4 bg-white/5 border border-white/10 text-center text-2xl tracking-[0.5em] text-white focus:border-blue-500 outline-none" placeholder="****">
+            
+            <div class="space-y-1">
+                <p class="text-[10px] text-blue-400/80 font-medium">※ 한 번 인증 시 본 기기에서 3개월간 접속이 유지됩니다.</p>
+                <p class="text-[9px] text-slate-500"> (단, 브라우저 쿠키 삭제 시 또는 타 기기 접속 시 재인증 필요)</p>
+            </div>
+
+            <button onclick="checkAccess()" class="w-full py-4 bg-blue-600 hover:bg-blue-500 font-black text-sm tracking-widest transition-all shadow-lg active:translate-y-1">시스템 접속하기</button>
+        </div>
+
+        <div class="pt-8 border-t border-white/10 text-slate-500 text-[10px] leading-relaxed">
+            <p>
+                [무단 사용 경고]<br>
+                본 시스템은 프리패스모빌리티 관계자 전용 업무 플랫폼입니다.<br>
+                비정상적인 접근 및 무단 복제, 데이터 외부 유출 시 법적 책임을 물을 수 있습니다.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div id="app" class="flex h-screen overflow-hidden text-[11px] opacity-0 transition-opacity duration-700">
     <!-- 좌측 필터바 -->
     <div class="w-[72px] bg-white flex flex-col z-[60] flex-shrink-0 border-r border-slate-200 relative sidebar-elevation">
         <div class="mt-[80px] flex flex-col items-center gap-2 px-1.5" id="sidebar-btns"></div>
@@ -91,11 +188,13 @@
     <div class="flex-1 flex flex-col min-w-0 relative" onclick="closeDetail()">
         <header class="h-[50px] bg-white border-b border-slate-200 flex items-center px-4 gap-4 flex-shrink-0 z-20 shadow-sm" onclick="event.stopPropagation(); closeDetail();">
             <div class="flex items-center gap-3 flex-1 max-w-2xl" onclick="event.stopPropagation()">
+                <!-- 상단 정보 출력 공간 (검색창 좌측) -->
+                <div id="identity-area" class="flex flex-col justify-center items-start mr-6 min-w-[150px]"></div>
+                
                 <div class="relative flex-1 max-sm:max-w-xs max-w-sm">
                     <i data-lucide="search" class="absolute left-2.5 top-2.5 text-slate-400 w-4 h-4"></i>
                     <input type="text" id="searchInput" placeholder="매물 통합 검색..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-none text-xs focus:outline-none focus:border-slate-400 bg-white">
                 </div>
-                <!-- 상단 엑셀 다운로드 버튼이 좌측 하단으로 이동함 -->
             </div>
 
             <div class="ml-auto flex items-center gap-4" onclick="event.stopPropagation()">
@@ -185,10 +284,11 @@
         activeSidebarPopup: null,
         activeFilterColumn: null,
         managerInfo: {
-            company: localStorage.getItem('erp_manager_company') || '',
-            nameTitle: localStorage.getItem('erp_manager_nameTitle') || '',
-            phone: localStorage.getItem('erp_manager_phone') || '',
-            includeAccount: localStorage.getItem('erp_manager_includeAccount') === 'true'
+            company: localStorage.getItem('erp_save_manager') === 'true' ? (localStorage.getItem('erp_manager_company') || '') : '',
+            nameTitle: localStorage.getItem('erp_save_manager') === 'true' ? (localStorage.getItem('erp_manager_nameTitle') || '') : '',
+            phone: localStorage.getItem('erp_save_manager') === 'true' ? (localStorage.getItem('erp_manager_phone') || '') : '',
+            includeAccount: localStorage.getItem('erp_manager_includeAccount') === 'true',
+            saveInfo: localStorage.getItem('erp_save_manager') === 'true'
         },
         authorized: false
     };
@@ -200,7 +300,66 @@
     const rentalOptions = ['50만 이하', '50~60', '60~70', '70~80', '80~90', '90~100', '100만 이상'];
     const depositOptions = ['100만 이하', '100~200', '200~300', '300~400', '400~500', '500만 이상'];
     const mileageOptions = ['1만km 미만', '1~3만', '3~5만', '5~10만', '10만km 이상'];
-    const yearOptions = ['1년 이하', '1~3년', '3~5년', '5년 이상'];
+    const yearOptions = ['26년 등록', '25년 등록', '24년 등록', '23년 등록', '22년 등록', '21년 이하 등록'];
+
+    // [1] 보안 코드 및 응원 메시지 설정
+    const ACCESS_CODE = "7777"; 
+    // [정밀 수정] 응원 메시지 리스트 (담백한 문구 위주)
+    const dailyQuotes = [
+        "오늘도 평안한 하루 되시길 바랍니다.",
+        "차근차근 나아가면 좋은 결과가 있을 거예요.",
+        "현장의 노고에 항상 감사드립니다.",
+        "오늘 하루도 귀한 걸음 응원합니다.",
+        "신뢰를 쌓아가는 당신의 모습을 응원합니다.",
+        "차분하게 준비하면 기회는 반드시 옵니다.",
+        "오늘도 맡은 자리에서 최선을 다하는 당신이 최고입니다."
+    ];
+
+    // [2] 접속 체크 함수
+    window.checkAccess = () => {
+        const code = document.getElementById('security-code').value;
+        const co = document.getElementById('gate-co').value;
+        const nt = document.getElementById('gate-nt').value;
+        const ph = document.getElementById('gate-ph').value;
+
+        if (!co || !nt || !ph) { alert("정보를 모두 입력해 주세요."); return; }
+        
+        if (code === ACCESS_CODE) {
+            state.managerInfo = { company: co, nameTitle: nt, phone: ph, includeAccount: true, saveInfo: true };
+            localStorage.setItem('erp_manager_company', co);
+            localStorage.setItem('erp_manager_nameTitle', nt);
+            localStorage.setItem('erp_manager_phone', ph);
+            localStorage.setItem('erp_save_manager', 'true');
+            localStorage.setItem('erp_access_granted', 'true');
+            
+            document.getElementById('access-gate').style.display = 'none';
+            document.getElementById('app').classList.remove('opacity-0');
+            render();
+        } else {
+            alert("보안 코드가 일치하지 않습니다.");
+            document.getElementById('security-code').value = '';
+        }
+    };
+
+    // [정밀 수정] 상단 정보 출력 함수 (좌측 정렬 및 은은한 스타일)
+    function updateTopIdentity() {
+        // 검색창(input) 바로 왼쪽에 위치한 identity-area를 찾아 렌더링
+        const identityArea = document.getElementById('identity-area');
+        if (!identityArea || !state.managerInfo.company) return;
+
+        const quote = dailyQuotes[new Date().getDate() % dailyQuotes.length];
+        
+        identityArea.innerHTML = `
+            <div class="flex flex-col text-left leading-tight mr-6">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">${state.managerInfo.company}</span>
+                    <span class="text-[11px] text-slate-700 font-black">${state.managerInfo.nameTitle} 님</span>
+                </div>
+                <span class="text-[9px] text-slate-400 font-medium mt-0.5 tracking-tight">${quote}</span>
+            </div>
+        `;
+        identityArea.classList.remove('hidden');
+    }
 
     // --- [UTILITIES] ---
     const parseNum = (str) => {
@@ -364,25 +523,21 @@
                     return false;
                 });
             }
+            // [정밀 수정] 연식 필터 옵션 및 로직 (단순 연도 대조 방식)
             let matchesYear = true;
             if (state.sidebarFilters.year.length > 0) {
-                const rawDate = item.차량_최초등록일 || item['최초등록일'] || "";
-                if (!rawDate) matchesYear = false;
-                else {
-                    try {
-                        const regDate = new Date(String(rawDate).replace(/\./g, '-'));
-                        const now = new Date();
-                        const diffTime = Math.abs(now - regDate);
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        const ageYears = diffDays / 365;
-                        matchesYear = state.sidebarFilters.year.some(range => {
-                            if (range === '1년 이하') return ageYears <= 1;
-                            if (range === '1~3년') return ageYears > 1 && ageYears <= 3;
-                            if (range === '3~5년') return ageYears > 3 && ageYears <= 5;
-                            if (range === '5년 이상') return ageYears > 5;
-                            return false;
-                        });
-                    } catch (e) { matchesYear = false; }
+                let rawDate = String(item.차량_최초등록일 || item['최초등록일'] || "").trim();
+                if (rawDate && rawDate !== "-") {
+                    const cleanDate = rawDate.replace(/[^0-9]/g, ''); 
+                    const yy = cleanDate.substring(0, 2); // 역순 데이터의 앞 2자리(yy) 추출
+
+                    matchesYear = state.sidebarFilters.year.some(range => {
+                        const filterYY = range.substring(0, 2); 
+                        if (range === '21년 이하 등록') return parseInt(yy) <= 21;
+                        return yy === filterYY;
+                    });
+                } else {
+                    matchesYear = false;
                 }
             }
             return matchesSearch && matchesColumnFilters && matchesRental && matchesDeposit && matchesMileage && matchesYear;
@@ -403,6 +558,10 @@
     function render() {
         const filtered = getProcessedData();
         document.getElementById('data-count').innerText = filtered.length;
+        
+        // 상단 헤더 담당자 정보 업데이트 호출
+        updateTopIdentity();
+        
         renderSidebar(); renderHeader(); renderTable(filtered); renderDetail(); renderPopups();
         lucide.createIcons();
     }
@@ -432,10 +591,24 @@
             const isActive = state.activeFilterColumn === dataKey;
             const isFilterable = filterableColumns.includes(label);
             let columnWidth = (label === '상태' || label === '구분') ? "w-[72px]" : label === '차량번호' ? "w-[100px]" : label === '제조사' ? "w-[90px]" : label === '모델' ? "w-[110px]" : label === '세부모델' ? "w-[120px]" : label === '세부트림(선택옵션)' ? "w-[160px]" : label === '외부색상' || label === '내부색상' ? "w-[85px]" : label === '주행거리' ? "w-[105px]" : "w-auto";
+            
+            // [정밀 수정] 세부트림(선택옵션) 항목의 제목줄 2단 구성 및 글자 크기 조정
+            let displayLabel = '';
+            if (label === '세부트림(선택옵션)') {
+                displayLabel = `
+                    <div class="flex flex-col items-center text-center w-full leading-tight">
+                        <span class="text-[11px] ${isFiltered || isSorted ? 'text-blue-700 font-black' : ''}">세부트림</span>
+                        <span class="text-[9px] opacity-70 font-bold">(선택옵션)</span>
+                    </div>
+                `;
+            } else {
+                displayLabel = `<span class="${isFiltered || isSorted ? 'text-blue-700 font-black' : ''} truncate">${label}</span>`;
+            }
+
             html += `
                 <th class="py-2 px-1 relative transition-colors border-b border-slate-200 ${isSorted || isActive ? 'bg-blue-50' : ''} ${columnWidth}">
                     <div ${isFilterable ? `onclick="toggleColumnFilter('${dataKey}'); event.stopPropagation();"` : ""} class="flex flex-row items-center justify-center gap-1 leading-tight h-full relative overflow-hidden ${isFilterable ? 'cursor-pointer' : ''}">
-                        <span class="${isFiltered || isSorted ? 'text-blue-700 font-black' : ''} truncate">${label}</span>
+                        ${displayLabel}
                         ${isFilterable ? `<div class="p-0.5 ${isFiltered || isActive ? 'text-blue-700' : 'text-slate-300'}"><i data-lucide="filter" class="w-2.5 h-2.5" ${isFiltered ? 'fill="currentColor"' : ''}></i></div>` : ''}
                         ${sortableColumns.includes(label) ? `<button onclick="handleSort('${dataKey}')" class="p-0.5 ${isSorted ? 'text-blue-700' : 'text-slate-300'}"><i data-lucide="${isSorted ? (state.sortConfig.direction === 'asc' ? 'arrow-up' : 'arrow-down') : 'arrow-up-down'}" class="w-2.5 h-2.5"></i></button>` : ''}
                     </div>
@@ -488,8 +661,8 @@
     function renderDetail() {
         const drawer = document.getElementById('detail-drawer');
         if (!state.selectedCar) { drawer.classList.add('translate-x-full'); drawer.classList.remove('animate-drawer-reset'); return; }
+        
         const c = state.selectedCar;
-
         const scrollableContainer = drawer.querySelector('.overflow-y-auto');
         const currentScroll = scrollableContainer ? scrollableContainer.scrollTop : 0;
 
@@ -507,8 +680,11 @@
                 <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-800 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-3 space-y-3 bg-white text-[11px] text-slate-800 hide-scrollbar">
+                <!-- [1] 1. 차량 상세 제원 (원상복구: 배기량 포함, 날짜는 데이터 그대로 표기) -->
                 <section class="border border-slate-200 bg-white rounded-none overflow-hidden shadow-sm tactile-section">
-                    <div class="bg-slate-50 px-3 py-2 border-b border-slate-200 flex justify-between items-center"><span class="font-black text-[11px] text-slate-600 uppercase tracking-tighter">1. 차량 상세 제원</span></div>
+                    <div class="bg-slate-50 px-3 py-2.5 border-b font-bold text-slate-600 uppercase tracking-tight flex justify-between items-center">
+                        <span>1. 차량 상세 제원</span>
+                    </div>
                     <div class="p-3 space-y-3.5">
                         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                             <div class="flex items-center gap-2 flex-wrap">
@@ -527,12 +703,11 @@
                         <div class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-3">
                             <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">주행거리</span><span class="font-black text-blue-700">${formatPrice(c.차량_현재주행거리)}km</span></div>
                             <div class="flex justify-between items-center">
-                                <!-- [정밀 수정] 전기차인 경우 '배기량' 문구를 '배터리'로 축약 -->
-                                <span class="text-slate-400 font-bold text-[10px] uppercase">${isEV ? '배터리' : '배기량'}</span>
-                                <span class="font-black">${isEV ? evCapacity : (c.차량_배기량 ? formatPrice(c.차량_배기량)+'cc' : '-')}</span>
+                                <span class="text-slate-400 font-bold text-[10px] uppercase">${String(c.차량_연료).includes('전기') ? '배터리' : '배기량'}</span>
+                                <span class="font-black">${String(c.차량_연료).includes('전기') ? getBatteryCapacity(c) : (c.차량_배기량 ? formatPrice(c.차량_배기량)+'cc' : '-')}</span>
                             </div>
-                            <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">최초등록</span><span class="font-black">${c.차량_최초등록일}</span></div>
-                            <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">차령만료</span><span class="font-black text-rose-600">${c.차령만료일 || '-'}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">최초등록일</span><span class="font-black text-slate-800">${c.차량_최초등록일 || c.최초등록일 || "-"}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-400 font-bold text-[10px] uppercase">차령만료일</span><span class="font-black text-rose-600">${c.차령만료일 || c.차량_차령만료일 || "-"}</span></div>
                             <div class="col-span-2 flex flex-col mt-1 p-2.5 bg-slate-50 border border-slate-100">
                                 <span class="text-slate-400 font-black text-[9px] uppercase mb-1.5">차량 세부 상태 및 비고</span>
                                 <div class="flex items-start gap-2"><span class="font-medium text-slate-700 leading-relaxed">${(c.차량_세부상태 || c.차량_비고) ? `${c.차량_세부상태 ? c.차량_세부상태 + ' ' : ''}${c.차량_비고 || ''}` : '입력된 내용이 없습니다.'}</span></div>
@@ -542,24 +717,35 @@
                     </div>
                 </section>
 
+                <!-- [2] 2. 대여료 및 보증금 안내 -->
                 <section class="border border-slate-200 bg-white shadow-sm overflow-hidden tactile-section">
-                    <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">2. 대여료 및 보증금 안내</div>
+                    <div class="bg-slate-50 px-3 py-2.5 border-b font-bold text-slate-600 uppercase tracking-tight flex justify-between items-center">
+                        <span>2. 대여료 및 보증금 안내</span>
+                    </div>
                     <table class="w-full text-center text-[11px] border-collapse border-x-0">
                         <thead class="bg-slate-50 border-b font-bold text-slate-500 uppercase">
                             <tr><th class="py-2">계약기간</th><th class="py-2 text-blue-800 text-right pr-4">월 대여료</th><th class="py-2 text-right pr-4 text-slate-400">보증금</th></tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100 font-medium">
+                        <tbody class="divide-y divide-slate-100 font-medium text-slate-800">
                             ${['6M', '12M', '24M', '36M', '48M', '60M'].map(m => {
-                                const fee = c[`금액_대여료_${m}`]; const dep = c[`금액_보증금_${m}`];
+                                const fee = c[`금액_대여료_${m}`]; 
+                                const dep = c[`금액_보증금_${m}`];
                                 if (!fee || fee === '-' || fee === '0' || fee === '0원') return '';
-                                return `<tr><td class="py-2 font-black uppercase">${formatPeriod(m)}</td><td class="py-2 text-blue-800 font-black text-right pr-4">${fee}원</td><td class="py-2 text-slate-500 text-right pr-4">${dep}원</td></tr>`;
+                                return `
+                                    <tr>
+                                        <td class="py-2 font-black uppercase">${formatPeriod(m)}</td>
+                                        <td class="py-2 text-blue-800 font-black text-right pr-4">${fee}원</td>
+                                        <td class="py-2 text-slate-500 text-right pr-4 font-bold">${dep}원</td>
+                                    </tr>`;
                             }).join('')}
                         </tbody>
                     </table>
                 </section>
 
                 <section class="border border-slate-200 bg-white rounded-none overflow-hidden shadow-sm tactile-section">
-                    <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">3. 보험 보상 및 공통 면책 조건</div>
+                    <div class="bg-slate-50 px-3 py-2.5 border-b font-bold text-slate-600 uppercase tracking-tight flex justify-between items-center">
+                        <span>3. 보험 보상 및 공통 면책 조건</span>
+                    </div>
                     <table class="w-full text-center border-collapse text-[10px] border-x-0">
                         <thead class="bg-slate-50 font-bold text-slate-400 uppercase border-b">
                             <tr><th class="py-2 px-2 text-left">보상 항목</th><th class="py-2 px-2 text-center">보상 한도</th><th class="py-2 px-2 text-right pr-4">면책금</th></tr>
@@ -576,7 +762,9 @@
                 </section>
 
                 <section class="border border-slate-200 bg-white rounded-none overflow-hidden shadow-sm tactile-section">
-                    <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">4. 계약 정책 및 연령/거리 옵션</div>
+                    <div class="bg-slate-50 px-3 py-2.5 border-b font-bold text-slate-600 uppercase tracking-tight flex justify-between items-center">
+                        <span>4. 계약 정책 및 연령/거리 옵션</span>
+                    </div>
                     <div class="divide-y divide-slate-100">
                         <div class="grid grid-cols-2 divide-x divide-slate-100">
                             <div class="p-2.5 flex justify-between items-baseline"><span class="text-slate-400 font-bold text-[9px] uppercase">기본연령</span><span class="font-black text-slate-800">${c.계약_기본운전연령 || '만 26세'}</span></div>
@@ -602,15 +790,18 @@
                 </section>
 
                 <section class="border border-slate-200 bg-white shadow-sm overflow-hidden tactile-section">
-                    <div class="bg-slate-50 px-3 py-2 border-b font-black text-slate-600 uppercase tracking-tighter">
-                        5. 담당자 및 입금 계좌 안내
-                        <span class="text-slate-400 font-medium text-[9px] ml-2 font-normal">(한번 써놓으면 저장됩니다)</span>
+                    <div class="bg-slate-50 px-3 py-2.5 border-b font-bold text-slate-600 uppercase tracking-tight flex justify-between items-center">
+                        <span>5. 담당자 및 입금 계좌 안내</span>
+                        <label class="flex items-center gap-1.5 cursor-pointer group">
+                            <input type="checkbox" onchange="toggleSaveManager(this.checked)" ${state.managerInfo.saveInfo ? 'checked' : ''} class="w-3.5 h-3.5 accent-blue-600">
+                            <span class="text-[9px] font-bold text-slate-400 group-hover:text-blue-600 transition-colors">담당자 정보 저장하기</span>
+                        </label>
                     </div>
                     <div class="p-3 space-y-3 bg-white">
                         <div class="grid grid-cols-2 gap-2">
-                            <input type="text" id="mgr-co" placeholder="소속" oninput="state.managerInfo.company=this.value; localStorage.setItem('erp_manager_company', this.value);" value="${state.managerInfo.company}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800">
-                            <input type="text" id="mgr-nt" placeholder="성명/직책" oninput="state.managerInfo.nameTitle=this.value; localStorage.setItem('erp_manager_nameTitle', this.value);" value="${state.managerInfo.nameTitle}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800">
-                            <input type="text" id="mgr-ph" placeholder="연락처" oninput="state.managerInfo.phone=this.value; localStorage.setItem('erp_manager_phone', this.value);" value="${state.managerInfo.phone}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800 col-span-2">
+                            <input type="text" placeholder="소속" oninput="updateManagerField('company', this.value)" value="${state.managerInfo.company}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800">
+                            <input type="text" placeholder="성명/직책" oninput="updateManagerField('nameTitle', this.value)" value="${state.managerInfo.nameTitle}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800">
+                            <input type="text" placeholder="연락처" oninput="updateManagerField('phone', this.value)" value="${state.managerInfo.phone}" class="p-2.5 border border-slate-200 outline-none font-bold focus:border-slate-800 col-span-2">
                         </div>
                         <div class="pt-2 border-t border-slate-100 space-y-2">
                             <div class="flex justify-between items-center">
@@ -673,6 +864,29 @@
     window.updateColumnFilter = (key, val) => { const curr = state.columnFilters[key] || []; state.columnFilters[key] = curr.includes(val) ? curr.filter(x => x !== val) : [...curr, val]; render(); };
     window.handleSort = (key) => { if (state.sortConfig.key === key) { state.sortConfig.direction = (state.sortConfig.direction === 'desc') ? 'asc' : 'desc'; } else { state.sortConfig = { key, direction: 'desc' }; } render(); };
     
+    window.updateManagerField = (field, value) => {
+        state.managerInfo[field] = value;
+        if (state.managerInfo.saveInfo) {
+            localStorage.setItem(`erp_manager_${field}`, value);
+        }
+    };
+
+    window.toggleSaveManager = (checked) => {
+        state.managerInfo.saveInfo = checked;
+        localStorage.setItem('erp_save_manager', String(checked));
+        
+        if (checked) {
+            localStorage.setItem('erp_manager_company', state.managerInfo.company);
+            localStorage.setItem('erp_manager_nameTitle', state.managerInfo.nameTitle);
+            localStorage.setItem('erp_manager_phone', state.managerInfo.phone);
+        } else {
+            localStorage.removeItem('erp_manager_company');
+            localStorage.removeItem('erp_manager_nameTitle');
+            localStorage.removeItem('erp_manager_phone');
+        }
+        renderDetail();
+    };
+
     window.updateManagerInfo = () => { 
         state.managerInfo.includeAccount = document.getElementById('mgr-acc').checked; 
         localStorage.setItem('erp_manager_includeAccount', String(state.managerInfo.includeAccount)); 
@@ -718,9 +932,142 @@
         const btn = document.getElementById('btn-copy-summary'); const originalContent = btn.innerHTML; btn.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> 텍스트 복사됨`; btn.classList.replace('bg-slate-800', 'bg-green-600'); lucide.createIcons(); setTimeout(() => { btn.innerHTML = originalContent; btn.classList.replace('bg-green-600', 'bg-slate-800'); lucide.createIcons(); }, 2000);
     };
 
-    window.downloadExcel = () => { const tableHeaders = ["상태", "구분", "차량번호", "제조사", "모델", "세부모델", "세부트림(선택옵션)", "외부색상", "내부색상", "주행거리", "대여료", "보증금"]; const csvContent = "\uFEFF" + tableHeaders.join(","); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", "매물리스트_엑셀.csv"); link.click(); };
+    window.downloadExcel = () => {
+        const dataToExport = getProcessedData();
+        if (dataToExport.length === 0) {
+            alert("다운로드할 데이터가 없습니다.");
+            return;
+        }
+
+        const excelStyle = `
+            <style>
+                table { border-collapse: collapse; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; }
+                
+                /* [정밀 수정] 테두리 선을 가장 얇게(0.5pt) 설정 */
+                th { 
+                    background-color: #f2f2f2; 
+                    color: #000000; 
+                    font-weight: bold; 
+                    border: 0.5pt solid #000000; 
+                    height: 30px; 
+                    font-size: 9pt; 
+                    white-space: nowrap; /* 줄바꿈 방지 */
+                }
+                td { 
+                    border: 0.5pt solid #000000; 
+                    padding: 4px 8px; 
+                    height: 25px; 
+                    font-size: 9pt; 
+                    color: #000000; 
+                    white-space: nowrap; /* 줄바꿈 방지 */
+                }
+
+                /* [정밀 수정] 기본 정렬을 좌측으로 변경 */
+                .text-left { text-align: left; }
+                .text-center { text-align: center; }
+                .num-right { text-align: right; mso-number-format: "#,##0"; }
+
+                /* [정밀 수정] A1 제목: 줄바꿈 없이 한 줄로 길게 좌측 정렬 */
+                .main-title { 
+                    font-size: 14pt; 
+                    font-weight: bold; 
+                    height: 40px; 
+                    text-align: left; 
+                    border: none; 
+                    white-space: nowrap; 
+                }
+            </style>
+        `;
+
+        // 1. 헤더 목록
+        const headers = [
+            "상태", "세부상태", "구분", "차량번호", "제조사", "모델명", "세부모델", "세부트림", "선택옵션", "주행거리", 
+            "연료", "배기량", "최초등록일", "차령만료일", "외부색상", "내부색상", "사진링크",
+            "6M대여료", "6M보증금", "12M대여료", "12M보증금", "24M대여료", "24M보증금", "36M대여료", "36M보증금", "48M대여료", "48M보증금", "60M대여료", "60M보증금",
+            "대인한도", "대인면책", "대물한도", "대물면책", "자손한도", "자손면책", "무보험한도", "무보험면책", "자차한도", "자차비율", "자차최소", "자차최대", "긴급출동",
+            "운전연령", "21세추가", "23세추가", "약정거리", "1만Km추가", "계약비고", "입금계좌"
+        ];
+
+        // 2. 테이블 생성 (A1 제목 좌측 정렬 및 줄바꿈 방지)
+        let tableHtml = `<table>`;
+        tableHtml += `<tr><td class="main-title" colspan="${headers.length}">장기렌터카 전용 ERP 매물 마스터 리스트</td></tr>`;
+        tableHtml += `<tr><td style="border:none; height:5px;"></td></tr>`;
+        
+        tableHtml += `<tr>`;
+        headers.forEach(h => { tableHtml += `<th>${h}</th>`; });
+        tableHtml += `</tr>`;
+
+        // 3. 데이터 행 생성 (모두 좌측 정렬 적용, 숫자는 우측)
+        dataToExport.forEach(item => {
+            const photoUrl = (item.차량_사진링크 || "").trim();
+            const photoLinkHtml = photoUrl && photoUrl !== "#" 
+                ? `<a href="${photoUrl}" style="color:#0000ff; text-decoration:underline;">사진보기</a>` 
+                : "-";
+
+            tableHtml += `
+                <tr>
+                    <td class="text-left">${item.차량_상태 || ''}</td>
+                    <td class="text-left">${item.차량_세부상태 || ''}</td>
+                    <td class="text-left">${item.차량_구분 || ''}</td>
+                    <td class="text-left">${item.차량_번호 || ''}</td>
+                    <td class="text-left">${item.차량_제조사 || ''}</td>
+                    <td class="text-left">${item.차량_모델명 || ''}</td>
+                    <td class="text-left">${item.차량_세부모델 || ''}</td>
+                    <td class="text-left">${item.차량_세부트림 || ''}</td>
+                    <td class="text-left">${item.차량_선택옵션 || ''}</td>
+                    <td class="num-right">${item.차량_현재주행거리 || 0}km</td>
+                    <td class="text-left">${item.차량_연료 || ''}</td>
+                    <td class="text-left">${item.차량_배기량 || ''}</td>
+                    <td class="text-left">${item.차량_최초등록일 || ''}</td>
+                    <td class="text-left">${item.차량_차령만료일 || ''}</td>
+                    <td class="text-left">${item.차량_외부색상 || ''}</td>
+                    <td class="text-left">${item.차량_내부색상 || ''}</td>
+                    <td class="text-center">${photoLinkHtml}</td>
+                    <td class="num-right">${item.금액_대여료_6M || '-'}</td><td class="num-right">${item.금액_보증금_6M || '-'}</td>
+                    <td class="num-right">${item.금액_대여료_12M || '-'}</td><td class="num-right">${item.금액_보증금_12M || '-'}</td>
+                    <td class="num-right">${item.금액_대여료_24M || '-'}</td><td class="num-right">${item.금액_보증금_24M || '-'}</td>
+                    <td class="num-right" style="font-weight:bold;">${item.금액_대여료_36M || '-'}</td><td class="num-right">${item.금액_보증금_36M || '-'}</td>
+                    <td class="num-right" style="font-weight:bold;">${item.금액_대여료_48M || '-'}</td><td class="num-right">${item.금액_보증금_48M || '-'}</td>
+                    <td class="num-right">${item.금액_대여료_60M || '-'}</td><td class="num-right">${item.금액_보증금_60M || '-'}</td>
+                    <td class="text-left">${item.보험_대인한도 || ''}</td><td class="text-left">${item.보험_대인면책 || ''}</td>
+                    <td class="text-left">${item.보험_대물한도 || ''}</td><td class="text-left">${item.보험_대물면책 || ''}</td>
+                    <td class="text-left">${item.보험_자손한도 || ''}</td><td class="text-left">${item.보험_자손면책 || ''}</td>
+                    <td class="text-left">${item.보험_무보험한도 || ''}</td><td class="text-left">${item.보험_무보험면책 || ''}</td>
+                    <td class="text-left">${item.보험_자차한도 || ''}</td><td class="text-left">${item.보험_자차수리비율 || ''}</td>
+                    <td class="text-left">${item.보험_자차면책최소 || ''}</td><td class="text-left">${item.보험_자차면책최대 || ''}</td>
+                    <td class="text-left">${item.보험_긴급출동 || ''}</td>
+                    <td class="text-left">${item.계약_기본운전연령 || ''}</td><td class="text-left">${item.계약_21세추가금 || ''}</td>
+                    <td class="text-left">${item.계약_23세추가금 || ''}</td><td class="text-left">${item.계약_약정주행거리 || ''}</td>
+                    <td class="text-left">${item.계약_1만Km추가금 || ''}</td>
+                    <td class="text-left">${item.계약_비고 || ''}</td>
+                    <td class="text-left">${item.계약_입금계좌번호 || ''}</td>
+                </tr>`;
+        });
+
+        tableHtml += `</table>`;
+
+        const template = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8">${excelStyle}</head><body>${tableHtml}</body></html>`;
+        const blob = new Blob([template], { type: 'application/vnd.ms-excel' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${new Date().toISOString().slice(0, 10)}_매물리스트_마스터.xls`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
+
     document.getElementById('searchInput').oninput = (e) => { state.searchTerm = e.target.value; render(); };
-    window.onload = () => { lucide.createIcons(); }; 
+    window.onload = () => { 
+        const isGranted = localStorage.getItem('erp_access_granted') === 'true';
+        if (isGranted) {
+            document.getElementById('access-gate').style.display = 'none';
+            document.getElementById('app').classList.remove('opacity-0');
+            fetchData(false);
+        } else {
+            document.getElementById('app').classList.add('opacity-0');
+        }
+        lucide.createIcons(); 
+    }; 
 </script>
 </body>
 </html>
